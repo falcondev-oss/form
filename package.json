@@ -12,7 +12,7 @@
     "form",
     "frontend",
     "state-management",
-    "reactive",
+    "reactivity",
     "typescript"
   ],
   "exports": {
