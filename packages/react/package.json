@@ -1,0 +1,48 @@
+{
+  "name": "@falcondev-oss/react-form",
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Type-safe, framework agnostic form state library based on @vue/reactivity.",
+  "license": "Apache-2.0",
+  "repository": "github:falcondev-oss/form",
+  "bugs": {
+    "url": "https://github.com/falcondev-oss/form/issues"
+  },
+  "keywords": [
+    "form",
+    "frontend",
+    "state-management",
+    "reactivity",
+    "typescript",
+    "react"
+  ],
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": "22",
+    "pnpm": "9"
+  },
+  "scripts": {
+    "build": "tsup src/",
+    "type-check": "tsc --build"
+  },
+  "dependencies": {
+    "@falcondev-oss/form-core": "workspace:*",
+    "@types/react": "^18.3.18",
+    "@vue/reactivity": "^3.5.13",
+    "react": "^18.3.1",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  }
+}
