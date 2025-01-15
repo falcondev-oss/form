@@ -1,11 +1,24 @@
+import type { Simplify, WritableDeep } from 'type-fest'
+import type {
+  AnyZodObject,
+  AnyZodTuple,
+  SomeZodObject,
+  z,
+  ZodArray,
+  ZodError,
+  ZodFormattedError,
+  ZodNullable,
+  ZodRecord,
+  ZodTypeAny,
+} from 'zod'
 import {
+  computed,
   type ComputedRef,
   type DeepReadonly,
   type MaybeRefOrGetter,
   type Reactive,
-  type Ref,
-  computed,
   readonly,
+  type Ref,
   ref,
   shallowReactive,
   toRef,
@@ -15,23 +28,9 @@ import { deleteProperty, getProperty, setProperty } from 'dot-prop'
 import { klona } from 'klona/full'
 import onChange from 'on-change'
 import { isArray, isDeepEqual } from 'remeda'
-import { P, match } from 'ts-pattern'
+import { match, P } from 'ts-pattern'
 
 import { refEffect, toReactive } from './reactive'
-
-import type { Simplify, WritableDeep } from 'type-fest'
-import type {
-  AnyZodObject,
-  AnyZodTuple,
-  SomeZodObject,
-  ZodArray,
-  ZodError,
-  ZodFormattedError,
-  ZodNullable,
-  ZodRecord,
-  ZodTypeAny,
-  z,
-} from 'zod'
 
 type ArrayMutationMethod =
   | 'push'
@@ -45,22 +44,50 @@ type ArrayMutationMethod =
 
 type ObjectHasFunctions<T> = [(...args: any[]) => any] extends [T[keyof T]] ? true : false
 
-type NullableLeaf<T> = {
-  [K in keyof T]: T[K] extends any[]
-    ? NullableLeaf<T[K]> | null
-    : T[K] extends object
-      ? [ObjectHasFunctions<T[K]>] extends [true]
-        ? T[K] | null
-        : Simplify<NullableLeaf<T[K]>>
-      : T[K] | null
-}
+// type NullableLeaf<T> = {
+//   [K in keyof T]: T[K] extends any[]
+//     ? NullableLeaf<T[K]> | null
+//     : T[K] extends object
+//       ? [ObjectHasFunctions<T[K]>] extends [true]
+//         ? T[K] | null
+//         : Simplify<NullableLeaf<T[K]>>
+//       : T[K] | null
+// }
+
+type NullableLeafRootAcc<T extends object, Acc = object> = [ObjectHasFunctions<T>] extends [true]
+  ? never
+  : Simplify<{
+      [K in keyof T]: NullableLeafWorker<T[K], Acc>
+    }>
+
+// Worker type that processes one level at a time
+type NullableLeafWorker<T, Acc> = T extends Acc[keyof Acc]
+  ? Acc[keyof Acc]
+  : NullableLeafAcc<T, Acc & { [K in keyof Acc | typeof Symbol.iterator]: T }>
+
+// Accumulator type to store intermediate results
+type NullableLeafAcc<T, Acc = object> = T extends any[]
+  ? NullableLeafWorker<T[number], Acc>[] | null
+  : T extends object
+    ? [ObjectHasFunctions<T>] extends [true]
+      ? T | null
+      : Simplify<{
+          [K in keyof T]: NullableLeafWorker<T[K], Acc>
+        }>
+    : T | null
+
+// Main type that initiates the transformation
+type NullableLeaf<T extends object> = NullableLeafRootAcc<T>
 
 export type FormSchema = SomeZodObject
 type FormValues<Schema extends FormSchema> = NullableLeaf<z.infer<Schema>>
 
 export const extendsSymbol = Symbol('extends')
 
-export interface FormOptions<Schema extends FormSchema, Output = z.infer<Schema>> {
+export interface FormOptions<
+  Schema extends FormSchema,
+  Output extends z.infer<Schema> = z.infer<Schema>,
+> {
   schema: Schema
   sourceValues: MaybeRefOrGetter<WritableDeep<NullableLeaf<Output>>>
   submit: (ctx: { values: Output }) => Promise<void>
@@ -253,7 +280,6 @@ export function useFormCore<
             if (!keyPath) throw new Error('Invalid key')
             if (!keyPath.startsWith(path)) throw new Error('Key does not reference an array item')
 
-            // eslint-disable-next-line unicorn/better-regex
             const index = keyPath.match(/\[(\d+)\]$/)?.[1]
             fieldValue.splice(Number(index), 1)
           }
@@ -295,7 +321,7 @@ export function useFormCore<
 
             const fieldValidator = getValidatorByPath(
               formOpts.schema,
-              // eslint-disable-next-line unicorn/better-regex
+
               path.replaceAll(/\[(\d+)\]/g, '.$1').split('.'),
             )
             if (!fieldValidator) throw new Error(`Missing validator: ${path}`)
@@ -390,7 +416,7 @@ export function useFormCore<
 
         const propValidator = getValidatorByPath(
           formOpts.schema,
-          // eslint-disable-next-line unicorn/better-regex
+
           currentPath.replaceAll(/\[(\d+)\]/g, '.$1').split('.'),
         )
         if (!propValidator) return
@@ -450,7 +476,7 @@ type FormFieldAccessor<T, V extends ZodTypeAny> = {
 
 type FormFields<Schema extends FormSchema> = BuildFormFieldAccessors<FormValues<Schema>, Schema>
 
-declare const ErrorMessageSymbol: unique symbol
+export const ErrorMessageSymbol: unique symbol = Symbol('ErrorMessageSymbol')
 type Error<N> = { [ErrorMessageSymbol]: N }
 
 type BuildFormFieldAccessors<T, V extends ZodTypeAny> = [T] extends [unknown[] | null]

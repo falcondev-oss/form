@@ -1,7 +1,7 @@
 {
   "name": "@falcondev-oss/form",
   "type": "module",
-  "version": "0.1.0",
+  "private": true,
   "description": "Type-safe, framework agnostic form state library based on @vue/reactivity.",
   "license": "Apache-2.0",
   "repository": "github:falcondev-oss/form",
@@ -15,50 +15,25 @@
     "reactivity",
     "typescript"
   ],
-  "exports": {
-    "./package.json": "./package.json",
-    ".": {
-      "import": "./dist/core.js",
-      "require": "./dist/core.cjs"
-    },
-    "./reactive": {
-      "import": "./dist/reactive.js",
-      "require": "./dist/reactive.cjs"
-    }
-  },
-  "files": [
-    "dist"
-  ],
   "engines": {
     "node": "22",
     "pnpm": "9"
   },
   "scripts": {
-    "test": "vitest run",
-    "build": "tsup",
+    "test": "pnpm -r run test",
+    "build": "pnpm -r run build",
+    "type-check": "tsc --build",
     "lint": "eslint --cache . && prettier --check --cache .",
     "lint:ci": "eslint --cache --cache-strategy content . && prettier --check --cache --cache-strategy content .",
-    "lint:fix": "eslint --fix --cache . && prettier --write --cache .",
-    "type-check": "tsc --noEmit"
-  },
-  "dependencies": {
-    "@vue/reactivity": "^3.5.13",
-    "dot-prop": "^9.0.0",
-    "klona": "^2.0.6",
-    "on-change": "^5.0.1",
-    "remeda": "^2.19.0",
-    "ts-pattern": "^5.6.0",
-    "type-fest": "^4.32.0",
-    "zod": "^3.24.1"
+    "lint:fix": "eslint --fix --cache . && prettier --write --cache ."
   },
   "devDependencies": {
-    "@louishaftmann/eslint-config": "^4.0.3",
-    "@louishaftmann/prettier-config": "^4.0.3",
-    "eslint": "~9.14.0",
+    "@louishaftmann/eslint-config": "^4.1.0",
+    "@louishaftmann/prettier-config": "^4.1.0",
+    "eslint": "^9.18.0",
     "prettier": "^3.4.2",
     "tsup": "^8.3.5",
-    "typescript": "^5.7.3",
-    "vitest": "^2.1.8"
+    "typescript": "^5.7.3"
   },
   "changelogithub": {
     "extends": "gh:falcondev-it/configs/changelogithub"
