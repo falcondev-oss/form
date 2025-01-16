@@ -8,5 +8,7 @@ export default defineConfig({
       composite: false,
     },
   },
+  platform: 'browser',
+  noExternal: ['on-change'],
   clean: true,
 })
