@@ -8,7 +8,15 @@ Type-safe, framework agnostic form state library based on @vue/reactivity.
 ## Installation
 
 ```bash
-npm add @falcondev-oss/form
+npm add @falcondev-oss/form-core
+```
+
+```bash
+npm add @drjume/form-react
+```
+
+```bash
+npm add @drjume/form-vue
 ```
 
 ## Example

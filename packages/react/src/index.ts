@@ -98,3 +98,5 @@ export function FormField<T, P extends object>(
     return false // rerender
   })
 }
+
+export { type FormFieldProps } from '@falcondev-oss/form-core'

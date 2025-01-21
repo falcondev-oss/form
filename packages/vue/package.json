@@ -1,5 +1,5 @@
 {
-  "name": "@falcondev-oss/form-react",
+  "name": "@falcondev-oss/form-vue",
   "type": "module",
   "version": "0.2.1",
   "description": "Type-safe, framework agnostic form state library based on @vue/reactivity.",
@@ -14,7 +14,7 @@
     "state-management",
     "reactivity",
     "typescript",
-    "react"
+    "vue"
   ],
   "exports": {
     "./package.json": "./package.json",
@@ -35,15 +35,13 @@
     "type-check": "tsc --build"
   },
   "peerDependencies": {
-    "react": "^18.3.1"
+    "vue": "^3.5.13"
   },
   "dependencies": {
     "@falcondev-oss/form-core": "workspace:*",
-    "@vue/reactivity": "^3.5.13",
     "zod": "^3.24.1"
   },
   "devDependencies": {
-    "@types/react": "^18.3.18",
     "typescript": "^5.7.3",
     "vitest": "^2.1.8"
   }
