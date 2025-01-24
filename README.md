@@ -13,11 +13,11 @@ npm add @falcondev-oss/form-core
 ```
 
 ```bash
-npm add @drjume/form-react
+npm add @falcondev-oss/form-react
 ```
 
 ```bash
-npm add @drjume/form-vue
+npm add @falcondev-oss/form-vue
 ```
 
 ## Example
