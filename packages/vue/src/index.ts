@@ -35,7 +35,9 @@ export function useFormHandles(forms: MaybeRefOrGetter<FormHandle[]>) {
   })
 }
 
-export function useForm<const Schema extends FormSchema>(opts: FormOptions<Schema>) {
+export function useForm<const Schema extends FormSchema>(
+  opts: FormOptions<Schema>,
+): ReturnType<typeof useFormCore<Schema>> & { _v: 'new' } {
   const form = useFormCore({
     ...opts,
     [extendsSymbol]: {
