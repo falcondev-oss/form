@@ -1,10 +1,11 @@
-import type { Simplify, WritableDeep } from 'type-fest'
+import type { IsAny, Simplify, WritableDeep } from 'type-fest'
 import type {
   AnyZodObject,
   AnyZodTuple,
   SomeZodObject,
   z,
   ZodArray,
+  ZodEffects,
   ZodError,
   ZodFormattedError,
   ZodNullable,
@@ -42,42 +43,50 @@ type ArrayMutationMethod =
   | 'reverse'
   | 'fill'
 
-type ObjectHasFunctions<T> = [(...args: any[]) => any] extends [T[keyof T]] ? true : false
+type ObjectHasFunctions<T> =
+  IsAny<T[keyof T]> extends true
+    ? false
+    : [(...args: any[]) => any] extends [T[keyof T]]
+      ? true
+      : false
 
-// type NullableLeaf<T> = {
-//   [K in keyof T]: T[K] extends any[]
-//     ? NullableLeaf<T[K]> | null
-//     : T[K] extends object
-//       ? [ObjectHasFunctions<T[K]>] extends [true]
-//         ? T[K] | null
-//         : Simplify<NullableLeaf<T[K]>>
-//       : T[K] | null
-// }
+type NullableLeaf<T> =
+  IsAny<T> extends true
+    ? any
+    : {
+        [K in keyof T]: T[K] extends any[]
+          ? NullableLeaf<T[K]> | null
+          : T[K] extends object
+            ? [ObjectHasFunctions<T[K]>] extends [true]
+              ? T[K] | null
+              : Simplify<NullableLeaf<T[K]>>
+            : T[K] | null
+      }
 
-type NullableLeafRootAcc<T extends object, Acc = object> = [ObjectHasFunctions<T>] extends [true]
-  ? never
-  : Simplify<{
-      [K in keyof T]: NullableLeafWorker<T[K], Acc>
-    }>
+// type NullableLeafRootAcc<T extends object, Acc = object> = [ObjectHasFunctions<T>] extends [true]
+//   ? never
+//   : Simplify<{
+//       [K in keyof T]: NullableLeafWorker<T[K], Acc>
+//     }>
 
-// Worker type that processes one level at a time
-type NullableLeafWorker<T, Acc> = T extends Acc[keyof Acc]
-  ? Acc[keyof Acc]
-  : NullableLeafAcc<T, Acc & { [K in keyof Acc | typeof Symbol.iterator]: T }>
+// // Worker type that processes one level at a time
+// type NullableLeafWorker<T, Acc> = T extends Acc[keyof Acc]
+//   ? Acc[keyof Acc]
+//   : NullableLeafAcc<T, Acc & { [K in keyof Acc | typeof Symbol.iterator]: T }>
 
-// Accumulator type to store intermediate results
-type NullableLeafAcc<T, Acc = object> = T extends any[]
-  ? NullableLeafWorker<T[number], Acc>[] | null
-  : T extends object
-    ? [ObjectHasFunctions<T>] extends [true]
-      ? T | null
-      : Simplify<{
-          [K in keyof T]: NullableLeafWorker<T[K], Acc>
-        }>
-    : T | null
+// // Accumulator type to store intermediate results
+// type NullableLeafAcc<T, Acc = object> = T extends any[]
+//   ? NullableLeafWorker<T[number], Acc>[] | null
+//   : T extends object
+//     ? [ObjectHasFunctions<T>] extends [true]
+//       ? T | null
+//       : Simplify<{
+//           [K in keyof T]: NullableLeafWorker<T[K], Acc>
+//         }>
+//     : T | null
 
-// Main type that initiates the transformation
-type NullableLeaf<T extends object> = NullableLeafRootAcc<T>
+// // Main type that initiates the transformation
+// type NullableLeaf<T extends object> = NullableLeafRootAcc<T>
 
 export type FormSchema = SomeZodObject
 type FormValues<Schema extends FormSchema> = NullableLeaf<z.infer<Schema>>
@@ -479,43 +488,47 @@ type FormFields<Schema extends FormSchema> = BuildFormFieldAccessors<FormValues<
 export const ErrorMessageSymbol: unique symbol = Symbol('ErrorMessageSymbol')
 type Error<N> = { [ErrorMessageSymbol]: N }
 
-type BuildFormFieldAccessors<T, V extends ZodTypeAny> = [T] extends [unknown[] | null]
-  ? V extends ZodNullable<ZodTypeAny>
-    ? BuildFormFieldAccessors<T, V['_def']['innerType']>
-    : V extends ZodArray<ZodTypeAny>
-      ? {
-          at: (
-            index: number,
-          ) => BuildFormFieldAccessors<Exclude<T, null>[number], V['element']> | undefined
-          delete: (key: string) => void
-          [Symbol.iterator]: () => ArrayIterator<
-            Reactive<BuildFormFieldAccessors<Exclude<T, null>[number], V['element']>>
-          >
-        } & FormFieldAccessor<T, V>
-      : V extends AnyZodTuple
-        ? {
-            at: <const I extends number>(
-              index: I,
-            ) => BuildFormFieldAccessors<Exclude<T, null>[I], V['items'][I]> | undefined
-            delete: (key: string) => void
-            [Symbol.iterator]: () => ArrayIterator<
-              Reactive<BuildFormFieldAccessors<Exclude<T, null>[number], V['items'][number]>>
-            >
-          } & FormFieldAccessor<T, V>
-        : Error<'array validator type not supported'>
-  : ObjectHasFunctions<T> extends true
-    ? FormFieldAccessor<T, V>
-    : [T] extends [Record<string, unknown>]
-      ? V extends AnyZodObject
-        ? {
-            [K in keyof T]: BuildFormFieldAccessors<T[K], V['shape'][K]>
-          } & FormFieldAccessor<T, V>
-        : V extends ZodRecord<ZodTypeAny>
+type BuildFormFieldAccessors<T, V extends ZodTypeAny> = [IsAny<T>] extends [true]
+  ? FormFieldAccessor<any, ZodTypeAny>
+  : [T] extends [unknown[] | null]
+    ? V extends ZodNullable<ZodTypeAny>
+      ? BuildFormFieldAccessors<T, V['_def']['innerType']>
+      : V extends ZodEffects<infer Output>
+        ? BuildFormFieldAccessors<T, Output>
+        : V extends ZodArray<ZodTypeAny>
           ? {
-              [K in keyof T]: BuildFormFieldAccessors<T[K], V['element']>
+              at: (
+                index: number,
+              ) => BuildFormFieldAccessors<Exclude<T, null>[number], V['element']> | undefined
+              delete: (key: string) => void
+              [Symbol.iterator]: () => ArrayIterator<
+                Reactive<BuildFormFieldAccessors<Exclude<T, null>[number], V['element']>>
+              >
             } & FormFieldAccessor<T, V>
-          : Error<'object validator type not supported'>
-      : FormFieldAccessor<T, V>
+          : V extends AnyZodTuple
+            ? {
+                at: <const I extends number>(
+                  index: I,
+                ) => BuildFormFieldAccessors<Exclude<T, null>[I], V['items'][I]> | undefined
+                delete: (key: string) => void
+                [Symbol.iterator]: () => ArrayIterator<
+                  Reactive<BuildFormFieldAccessors<Exclude<T, null>[number], V['items'][number]>>
+                >
+              } & FormFieldAccessor<T, V>
+            : Error<'array validator type not supported'>
+    : ObjectHasFunctions<T> extends true
+      ? FormFieldAccessor<T, V>
+      : [T] extends [Record<string, unknown>]
+        ? V extends AnyZodObject
+          ? {
+              [K in keyof T]: BuildFormFieldAccessors<T[K], V['shape'][K]>
+            } & FormFieldAccessor<T, V>
+          : V extends ZodRecord<ZodTypeAny>
+            ? {
+                [K in keyof T]: BuildFormFieldAccessors<T[K], V['element']>
+              } & FormFieldAccessor<T, V>
+            : Error<'object validator type not supported'>
+        : FormFieldAccessor<T, V>
 
 function getValidatorByPath(validator: ZodTypeAny, path: string[]) {
   if (path.length === 0) return validator
