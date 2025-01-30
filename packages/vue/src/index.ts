@@ -57,3 +57,4 @@ export function useForm<const Schema extends FormSchema>(
 }
 
 export { type FormField, type FormFieldProps } from '@falcondev-oss/form-core'
+export { refEffect } from '@falcondev-oss/form-core/reactive'
