@@ -50,7 +50,7 @@ type ObjectHasFunctions<T> =
       ? true
       : false
 
-type NullableLeaf<T> =
+export type NullableLeaf<T> =
   IsAny<T> extends true
     ? any
     : {
