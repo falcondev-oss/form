@@ -1,11 +1,7 @@
+import type { FormOptions, FormSchema } from '@falcondev-oss/form-core'
 import type { MaybeRef, MaybeRefOrGetter, WritableComputedRef } from 'vue'
 import type { ZodTypeAny } from 'zod'
-import {
-  extendsSymbol,
-  type FormOptions,
-  type FormSchema,
-  useFormCore,
-} from '@falcondev-oss/form-core'
+import { extendsSymbol, useFormCore } from '@falcondev-oss/form-core'
 import { computed, toValue } from 'vue'
 
 declare module '@falcondev-oss/form-core' {

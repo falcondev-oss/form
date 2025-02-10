@@ -1,22 +1,12 @@
+import type { FormFieldProps, FormOptions, FormSchema } from '@falcondev-oss/form-core'
+import type { Ref } from '@vue/reactivity'
+import type { FunctionComponent, NamedExoticComponent } from 'react'
+
 import type { ZodTypeAny } from 'zod'
-import {
-  extendsSymbol,
-  type FormFieldProps,
-  type FormOptions,
-  type FormSchema,
-  useFormCore,
-} from '@falcondev-oss/form-core'
+import { extendsSymbol, useFormCore } from '@falcondev-oss/form-core'
 
-import { reactive, type Ref, ref, watch } from '@vue/reactivity'
-
-import {
-  type FunctionComponent,
-  memo,
-  type NamedExoticComponent,
-  useEffect,
-  useMemo,
-  useState,
-} from 'react'
+import { reactive, ref, watch } from '@vue/reactivity'
+import { memo, useEffect, useMemo, useState } from 'react'
 
 export type FieldModelProps<T> = {
   model: FieldModel<T>

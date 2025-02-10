@@ -1,3 +1,4 @@
+import type { ComputedRef, DeepReadonly, MaybeRefOrGetter, Reactive, Ref } from '@vue/reactivity'
 import type { IsAny, Simplify, WritableDeep } from 'type-fest'
 import type {
   AnyZodObject,
@@ -12,19 +13,7 @@ import type {
   ZodRecord,
   ZodTypeAny,
 } from 'zod'
-import {
-  computed,
-  type ComputedRef,
-  type DeepReadonly,
-  type MaybeRefOrGetter,
-  type Reactive,
-  readonly,
-  type Ref,
-  ref,
-  shallowReactive,
-  toRef,
-  watch,
-} from '@vue/reactivity'
+import { computed, readonly, ref, shallowReactive, toRef, watch } from '@vue/reactivity'
 import { deleteProperty, getProperty, setProperty } from 'dot-prop'
 import { klona } from 'klona/full'
 import onChange from 'on-change'
@@ -144,13 +133,16 @@ export function useFormCore<
   const disabled = computed(() => isSubmitting.value)
 
   const formError = ref<ZodError>()
+  if (sourceValues.value === undefined) {
+    throw new Error("useForm(): `sourceValues` can't be undefined")
+  }
   const _formDataRef = ref(clone(sourceValues.value)) as Ref<Data>
   const formData = toReactive(_formDataRef) as Data
 
   function reset() {
     // console.debug('useCoolForm: reset()')
 
-    _formDataRef.value = clone(sourceValues.value)
+    _formDataRef.value = clone(sourceValues.value ?? {})
     formUpdateCount.value = 0
     formError.value = undefined
   }
@@ -448,7 +440,7 @@ export function useFormCore<
   return {
     fields: createFormFieldProxy(),
     isDirty: computed(() => formUpdateCount.value !== 0),
-    isChanged: computed(() => !isDeepEqual<unknown>(formData, sourceValues.value)),
+    isChanged: computed(() => !isDeepEqual<unknown>(formData, sourceValues.value ?? {})),
     isSubmitting: readonly(isSubmitting),
     data: observedFormData,
     errors: computed(() => formError.value?.format()),
