@@ -1,12 +1,11 @@
 import type { FormFieldProps, FormOptions, FormSchema } from '@falcondev-oss/form-core'
 import type { Ref } from '@vue/reactivity'
 import type { FunctionComponent, NamedExoticComponent } from 'react'
-
 import type { ZodTypeAny } from 'zod'
 import { extendsSymbol, useFormCore } from '@falcondev-oss/form-core'
-
 import { reactive, ref, watch } from '@vue/reactivity'
 import { memo, useEffect, useMemo, useState } from 'react'
+import { refEffect } from '@falcondev-oss/form-core/reactive'
 
 export type FieldModelProps<T> = {
   model: FieldModel<T>
@@ -32,40 +31,56 @@ export function useForm<const Schema extends FormSchema>(
 ): ReturnType<typeof useFormCore<Schema>> {
   const setTick = useState(0)[1]
 
-  const form = useMemo(
-    () =>
-      useFormCore<Schema>({
-        ...opts,
+  const { form, sourceValuesRef } = useMemo(() => {
+    const sourceValuesRef = refEffect(opts.sourceValues)
+    // watch(sourceValuesRef, () => {
+    //   console.debug('useForm().watch -> rerender', { sourceValues: sourceValuesRef.value })
+    // })
 
-        [extendsSymbol]: {
-          $use: (field) => {
-            // console.debug('$use()', field.path)
+    const form = useFormCore({
+      ...opts,
+      sourceValues: () => sourceValuesRef.value,
 
-            const tickRef = ref(0)
+      [extendsSymbol]: {
+        $use: (field) => {
+          // console.debug('$use()', field.path)
 
-            watch([field.errors, field.value], () => {
-              // console.debug('$use().watch -> rerender', { errors: field.errors.value })
-              tickRef.value = Date.now()
-              setTick(Date.now())
-            })
+          const tickRef = ref(0)
 
-            return {
-              model: reactive({
-                value: field.value,
-                onUpdate: field.handleChange,
-              }),
-              [tick]: tickRef,
-            }
-          },
+          watch([field.errors, field.value], () => {
+            // console.debug('$use().watch -> rerender', { errors: field.errors.value })
+            tickRef.value = Date.now()
+            setTick(Date.now())
+          })
+
+          return {
+            model: reactive({
+              value: field.value,
+              onUpdate: field.handleChange,
+            }),
+            [tick]: tickRef,
+          }
         },
-      }),
-    [],
-  )
+      },
+    })
+
+    return {
+      form,
+      sourceValuesRef,
+    }
+  }, [])
+
+  useEffect(() => {
+    if (typeof opts.sourceValues === 'function') return
+    // console.debug('useForm().useEffect(..., [opts.sourceValues])', opts.sourceValues)
+
+    sourceValuesRef.value = opts.sourceValues
+  }, [opts.sourceValues])
 
   useEffect(() => {
     // console.debug('useForm().useEffect', form.data)
 
-    watch([form.errors, form.isSubmitting], () => {
+    watch([form.errors, form.isSubmitting, form.isChanged, form.isDirty], () => {
       // console.debug('useForm().watch -> rerender', { isSubmitting: form.isSubmitting.value })
       setTick(Date.now())
     })

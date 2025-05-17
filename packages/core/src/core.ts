@@ -537,8 +537,8 @@ export type FormFields<Schema extends FormSchema> = BuildFormFieldAccessors<
   Schema
 >
 
-export const ErrorMessageSymbol: unique symbol = Symbol('ErrorMessageSymbol')
-type Error<N> = { [ErrorMessageSymbol]: N }
+export const _error: unique symbol = Symbol('_error')
+type Error<M> = { [_error]: M }
 
 type BuildFormFieldAccessors<T, V extends ZodTypeAny> = [IsAny<T>] extends [true]
   ? FormFieldAccessor<any, ZodTypeAny>

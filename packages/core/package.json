@@ -37,7 +37,7 @@
   ],
   "engines": {
     "node": "22",
-    "pnpm": "9"
+    "pnpm": "10"
   },
   "scripts": {
     "test": "vitest run",
@@ -45,17 +45,17 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@vue/reactivity": "^3.5.13",
+    "@vue/reactivity": "^3.5.14",
     "dot-prop": "^9.0.0",
     "klona": "^2.0.6",
     "on-change": "^5.0.1",
-    "remeda": "^2.20.1",
-    "ts-pattern": "^5.6.2",
-    "type-fest": "^4.34.1",
-    "zod": "^3.24.1"
+    "remeda": "^2.21.6",
+    "ts-pattern": "^5.7.0",
+    "type-fest": "^4.41.0",
+    "zod": "^3.24.4"
   },
   "devDependencies": {
-    "typescript": "^5.7.3",
-    "vitest": "^2.1.9"
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.3"
   }
 }

@@ -18,7 +18,7 @@
   ],
   "engines": {
     "node": "22",
-    "pnpm": "9"
+    "pnpm": "10"
   },
   "scripts": {
     "test": "pnpm -r run test",
@@ -29,12 +29,12 @@
     "lint:fix": "eslint --fix --cache . && prettier --write --cache ."
   },
   "devDependencies": {
-    "@louishaftmann/eslint-config": "^4.1.1",
-    "@louishaftmann/prettier-config": "^4.1.1",
-    "eslint": "^9.20.0",
-    "prettier": "^3.5.0",
-    "tsup": "^8.3.6",
-    "typescript": "^5.7.3"
+    "@louishaftmann/eslint-config": "^4.2.0",
+    "@louishaftmann/prettier-config": "^4.2.0",
+    "eslint": "^9.27.0",
+    "prettier": "^3.5.3",
+    "tsup": "^8.5.0",
+    "typescript": "^5.8.3"
   },
   "changelogithub": {
     "extends": "gh:falcondev-it/configs/changelogithub"
