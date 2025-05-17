@@ -3,9 +3,9 @@ import type { Ref } from '@vue/reactivity'
 import type { FunctionComponent, NamedExoticComponent } from 'react'
 import type { ZodTypeAny } from 'zod'
 import { extendsSymbol, useFormCore } from '@falcondev-oss/form-core'
+import { refEffect } from '@falcondev-oss/form-core/reactive'
 import { reactive, ref, watch } from '@vue/reactivity'
 import { memo, useEffect, useMemo, useState } from 'react'
-import { refEffect } from '@falcondev-oss/form-core/reactive'
 
 export type FieldModelProps<T> = {
   model: FieldModel<T>
