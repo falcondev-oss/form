@@ -1,22 +1,15 @@
 {
+  "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "target": "es2022",
-    "lib": ["es2022"],
-    "moduleDetection": "force",
-
-    "module": "preserve",
-    "resolveJsonModule": true,
-    "allowJs": true,
-    "strict": true,
-    "noImplicitOverride": true,
-    "noUncheckedIndexedAccess": true,
-
-    "noEmit": true,
-    "esModuleInterop": true,
-    "isolatedModules": true,
-    "verbatimModuleSyntax": true,
-    "skipLibCheck": true
+    "composite": false,
+    "declarationMap": false,
+    "emitDeclarationOnly": false,
+    "lib": ["es2022"]
   },
-  "references": [{ "path": "./packages/core" }, { "path": "./packages/react" }],
+  "references": [
+    { "path": "./packages/core" },
+    { "path": "./packages/react" },
+    { "path": "./packages/vue" }
+  ],
   "include": ["*.ts", "*.js"]
 }

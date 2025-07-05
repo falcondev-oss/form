@@ -1,27 +1,4 @@
 {
-  "compilerOptions": {
-    "composite": true,
-    "target": "es2022",
-    "lib": ["es2022", "dom", "dom.iterable"],
-    "moduleDetection": "force",
-
-    "module": "preserve",
-    "resolveJsonModule": true,
-    "allowJs": true,
-    "strict": true,
-    "noImplicitOverride": true,
-    "noUncheckedIndexedAccess": true,
-
-    "declaration": true,
-    "emitDeclarationOnly": true,
-    "noEmit": false,
-    "outDir": ".types/",
-    "esModuleInterop": true,
-    "isolatedModules": true,
-    "verbatimModuleSyntax": true,
-    "skipLibCheck": true
-  },
-  "references": [{ "path": "../core" }],
-  "include": ["."],
-  "exclude": ["node_modules", "dist"]
+  "extends": "../../tsconfig.base.json",
+  "references": [{ "path": "../core" }]
 }
