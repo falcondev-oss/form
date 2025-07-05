@@ -19,7 +19,7 @@ export type FieldModel<T> = {
 const tick = Symbol('tick')
 
 declare module '@falcondev-oss/form-core' {
-  // eslint-disable-next-line unused-imports/no-unused-vars, no-shadow
+  // eslint-disable-next-line unused-imports/no-unused-vars
   interface FormField<T, V extends ZodTypeAny> {
     model: FieldModel<T>
     [tick]: Ref<number>

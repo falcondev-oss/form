@@ -18,6 +18,5 @@
     "skipLibCheck": true
   },
   "references": [{ "path": "./packages/core" }, { "path": "./packages/react" }],
-  "include": ["*.ts", "*.js"],
-  "exclude": ["node_modules/", "packages/"]
+  "include": ["*.ts", "*.js"]
 }
