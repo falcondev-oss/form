@@ -78,7 +78,7 @@ const updatePathSymbol = Symbol('updatePath')
 interface FormFieldInternal<T> {
   errors: Ref<string[] | undefined>
   value: Readonly<Ref<T>>
-  handleChange: (value: T) => void
+  handleChange(value: T): void
   handleBlur: () => void
   reset: () => void
   disabled: ComputedRef<boolean>
