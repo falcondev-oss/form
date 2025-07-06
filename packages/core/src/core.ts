@@ -9,18 +9,7 @@ import type {
   Writable,
 } from 'type-fest'
 import type { IsUnion } from 'type-fest/source/internal'
-import type {
-  output,
-  z,
-  ZodArray,
-  ZodDiscriminatedUnion,
-  ZodError,
-  ZodFormattedError,
-  ZodObject,
-  ZodRecord,
-  ZodSafeParseResult,
-  ZodType,
-} from 'zod/v4'
+import type { StandardSchemaV1 } from '@standard-schema/spec'
 import { computed, reactive, readonly, ref, shallowReactive, toRef, watch } from '@vue/reactivity'
 import { deleteProperty, getProperty, setProperty } from 'dot-prop'
 import { klona } from 'klona/full'
@@ -28,6 +17,7 @@ import onChange from 'on-change'
 import { isArray, isDeepEqual } from 'remeda'
 import { match, P } from 'ts-pattern'
 import { refEffect, toReactive } from './reactive'
+import type { ZodArray, ZodObject, ZodType } from 'zod/v4'
 
 type ArrayMutationMethod =
   | 'push'
@@ -61,8 +51,10 @@ export type NullableDeep<T> =
       : T | null
     : never
 
-export type FormSchema = ZodObject | ZodRecord | ZodDiscriminatedUnion
-type FormData<Schema extends FormSchema> = NonNullable<NullableDeep<z.infer<Schema>>>
+export type FormSchema = StandardSchemaV1
+type FormData<Schema extends FormSchema> = NonNullable<
+  NullableDeep<StandardSchemaV1.InferOutput<Schema>>
+>
 
 export const extendsSymbol = Symbol('extends')
 
@@ -70,7 +62,7 @@ type MaybeGetter<T extends object> = T | (() => T)
 
 export interface FormOptions<
   Schema extends FormSchema,
-  Output extends z.infer<Schema> = z.infer<Schema>,
+  Output extends StandardSchemaV1.InferOutput<Schema> = StandardSchemaV1.InferOutput<Schema>,
 > {
   schema: Schema
   sourceValues: MaybeGetter<Writable<FormData<Schema>>>
@@ -84,7 +76,7 @@ export interface FormOptions<
 const updatePathSymbol = Symbol('updatePath')
 
 interface FormFieldInternal<T> {
-  errors: Ref<string[]>
+  errors: Ref<string[] | undefined>
   value: Readonly<Ref<T>>
   handleChange: (value: T) => void
   handleBlur: () => void
@@ -119,14 +111,14 @@ export function useFormCore<
   const isSubmitting = ref(false)
   const disabled = computed(() => isSubmitting.value)
 
-  const formError = ref<ZodError<output<Schema>>>()
-  const _formDataRef = ref(clone(sourceValues.value)) as Ref<Data>
-  const formData = toReactive(_formDataRef) as Data
+  const formError = ref<StandardSchemaV1.FailureResult>()
+  const formDataRef = ref(clone(sourceValues.value)) as Ref<Data>
+  const formData = toReactive(formDataRef) as Data
 
   function reset() {
     // console.debug('useCoolForm: reset()')
 
-    _formDataRef.value = clone(sourceValues.value)
+    formDataRef.value = clone(sourceValues.value)
     formUpdateCount.value = 0
     formError.value = undefined
   }
@@ -310,7 +302,7 @@ export function useFormCore<
             })
 
             const fieldValidator = getValidatorByPath(
-              formOpts.schema,
+              formOpts.schema as unknown as ZodType,
 
               path.replaceAll(/\[(\d+)\]/g, '.$1').split('.'),
             )
@@ -318,41 +310,47 @@ export function useFormCore<
             const initialValue = computed<unknown>(() =>
               getProperty(sourceValues.value, path, undefined),
             )
-            const fieldError = ref<ZodFormattedError<unknown>>()
+            const fieldError = ref<StandardSchemaV1.FailureResult>()
             watch(formError, () => {
-              fieldError.value = getProperty(
-                formError.value?.format(),
-                pathRef.value,
-                undefined,
-              ) as ZodFormattedError<unknown> | undefined
+              fieldError.value = formError.value
+                ? ({
+                    issues: formError.value.issues.filter((issue) => {
+                      if (!issue.path) return false
+                      const issuePath = issue.path
+                        .map((p) => (typeof p === 'object' ? p.key : p))
+                        .join('.')
+                      return issuePath === pathRef.value
+                    }),
+                  } satisfies StandardSchemaV1.FailureResult)
+                : undefined
             })
-            const fieldErrors = refEffect(() => fieldError.value?._errors ?? [])
+            const fieldErrors = refEffect(() =>
+              fieldError.value && fieldError.value.issues.length > 0
+                ? fieldError.value.issues.map((i) => i.message)
+                : undefined,
+            )
             watch(isSubmitting, () => {
               if (isSubmitting.value) fieldErrors.reset()
             })
 
-            function validateField() {
-              const formResult = formOpts.schema.safeParse(formData)
-              const localFormError = formResult.error?.format()
-
-              // console.debug('localFormError', localFormError)
-              const fieldValidationError = getProperty(
-                localFormError,
-                `${pathRef.value}`,
-                undefined,
-              ) as ZodFormattedError<unknown> | undefined
-
-              if (
-                !fieldValidationError ||
-                !fieldValidationError._errors ||
-                (Array.isArray(fieldValidationError._errors) &&
-                  fieldValidationError._errors.length === 0)
-              ) {
+            async function validateField() {
+              const formResult = await Promise.resolve(
+                formOpts.schema['~standard'].validate(formData),
+              )
+              if (!formResult.issues) {
                 fieldError.value = undefined
                 return
               }
 
-              fieldError.value = fieldValidationError
+              fieldError.value = {
+                issues: formResult.issues.filter((issue) => {
+                  if (!issue.path) return false
+                  const issuePath = issue.path
+                    .map((p) => (typeof p === 'object' ? p.key : p))
+                    .join('.')
+                  return issuePath === pathRef.value
+                }),
+              } satisfies StandardSchemaV1.FailureResult
             }
 
             const now = Date.now()
@@ -375,7 +373,7 @@ export function useFormCore<
                 updateCount.value++
                 formUpdateCount.value++
 
-                if (fieldErrors.value.length > 0) validateField()
+                if (fieldErrors.value && fieldErrors.value.length > 0) validateField()
               },
               handleBlur: () => {
                 // console.debug(`======== handleBlur (${pathRef.value})`)
@@ -426,14 +424,14 @@ export function useFormCore<
     })
   }
 
-  function validateForm() {
-    const result = formOpts.schema.safeParse(formData) as ZodSafeParseResult<z.infer<Schema>>
-    if (result.success) {
+  async function validateForm() {
+    const result = await Promise.resolve(formOpts.schema['~standard'].validate(formData))
+    if (!result.issues) {
       formError.value = undefined
-      return result.data
+      return result.value
     }
 
-    formError.value = result.error
+    formError.value = result
   }
 
   return {
@@ -442,7 +440,7 @@ export function useFormCore<
     isChanged: computed(() => !isDeepEqual<unknown>(formData, sourceValues.value)),
     isSubmitting: readonly(isSubmitting),
     data: observedFormData,
-    errors: computed(() => formError.value?.format()),
+    errors: computed(() => formError.value?.issues),
     reset,
     submit: async () => {
       isSubmitting.value = true
