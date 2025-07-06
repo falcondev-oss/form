@@ -1,9 +1,8 @@
 import type { FormFieldProps, FormOptions, FormSchema } from '@falcondev-oss/form-core'
 import type { Ref } from '@vue/reactivity'
 import type { FunctionComponent, NamedExoticComponent } from 'react'
-import type { ZodTypeAny } from 'zod'
-import { extendsSymbol, useFormCore } from '@falcondev-oss/form-core'
 import { refEffect } from '@falcondev-oss/form-core/reactive'
+import { extendsSymbol, useFormCore } from '@falcondev-oss/form-core'
 import { reactive, ref, watch } from '@vue/reactivity'
 import { memo, useEffect, useMemo, useState } from 'react'
 
@@ -19,8 +18,7 @@ export type FieldModel<T> = {
 const tick = Symbol('tick')
 
 declare module '@falcondev-oss/form-core' {
-  // eslint-disable-next-line unused-imports/no-unused-vars
-  interface FormField<T, V extends ZodTypeAny> {
+  interface FormField<T> {
     model: FieldModel<T>
     [tick]: Ref<number>
   }
@@ -31,16 +29,19 @@ export function useForm<const Schema extends FormSchema>(
 ): ReturnType<typeof useFormCore<Schema>> {
   const setTick = useState(0)[1]
 
-  const { form, sourceValuesRef } = useMemo(() => {
+  const { form, sourceValuesRef, submitFnRef } = useMemo(() => {
     const sourceValuesRef = refEffect(opts.sourceValues)
+    const submitFnRef = ref(opts.submit)
     // watch(sourceValuesRef, () => {
     //   console.debug('useForm().watch -> rerender', { sourceValues: sourceValuesRef.value })
     // })
 
+    // eslint-disable-next-line react-hooks/rules-of-hooks
     const form = useFormCore({
       ...opts,
-      sourceValues: () => sourceValuesRef.value,
+      submit: async (...args) => submitFnRef.value(...args),
 
+      sourceValues: () => sourceValuesRef.value,
       [extendsSymbol]: {
         $use: (field) => {
           // console.debug('$use()', field.path)
@@ -67,8 +68,13 @@ export function useForm<const Schema extends FormSchema>(
     return {
       form,
       sourceValuesRef,
+      submitFnRef,
     }
   }, [])
+
+  useEffect(() => {
+    submitFnRef.value = opts.submit
+  }, [opts.submit])
 
   useEffect(() => {
     if (typeof opts.sourceValues === 'function') return
@@ -104,4 +110,4 @@ export function FormField<T, P extends object>(
   })
 }
 
-export { type FormFieldProps, type NullableLeaf } from '@falcondev-oss/form-core'
+export { type FormFieldProps, type NullableDeep } from '@falcondev-oss/form-core'

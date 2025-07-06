@@ -1,12 +1,10 @@
 import type { FormOptions, FormSchema } from '@falcondev-oss/form-core'
 import type { MaybeRef, MaybeRefOrGetter, WritableComputedRef } from 'vue'
-import type { ZodTypeAny } from 'zod'
 import { extendsSymbol, useFormCore } from '@falcondev-oss/form-core'
 import { computed, toValue } from 'vue'
 
 declare module '@falcondev-oss/form-core' {
-  // eslint-disable-next-line unused-imports/no-unused-vars
-  interface FormField<T, V extends ZodTypeAny> {
+  interface FormField<T> {
     model: WritableComputedRef<T>
   }
 }
@@ -52,5 +50,5 @@ export function useForm<const Schema extends FormSchema>(
   return { ...form, _v: 'new' as const }
 }
 
-export { type FormField, type FormFieldProps, type NullableLeaf } from '@falcondev-oss/form-core'
+export { type FormField, type FormFieldProps, type NullableDeep } from '@falcondev-oss/form-core'
 export { refEffect } from '@falcondev-oss/form-core/reactive'
