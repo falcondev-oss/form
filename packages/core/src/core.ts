@@ -1,31 +1,32 @@
+/* eslint-disable ts/no-deprecated */
 import type { ComputedRef, DeepReadonly, Reactive, Ref } from '@vue/reactivity'
-import type { IsAny, Simplify, WritableDeep } from 'type-fest'
 import type {
-  AnyZodObject,
-  AnyZodTuple,
-  SafeParseReturnType,
-  SomeZodObject,
+  IsAny,
+  IsStringLiteral,
+  IsTuple,
+  PickIndexSignature,
+  Simplify,
+  Writable,
+} from 'type-fest'
+import type { IsUnion } from 'type-fest/source/internal'
+import type {
+  output,
   z,
   ZodArray,
   ZodDiscriminatedUnion,
-  ZodDiscriminatedUnionOption,
-  ZodEffects,
   ZodError,
   ZodFormattedError,
-  ZodLiteral,
-  ZodNullable,
   ZodObject,
-  ZodReadonly,
   ZodRecord,
-  ZodTypeAny,
-} from 'zod'
+  ZodSafeParseResult,
+  ZodType,
+} from 'zod/v4'
 import { computed, reactive, readonly, ref, shallowReactive, toRef, watch } from '@vue/reactivity'
 import { deleteProperty, getProperty, setProperty } from 'dot-prop'
 import { klona } from 'klona/full'
 import onChange from 'on-change'
 import { isArray, isDeepEqual } from 'remeda'
 import { match, P } from 'ts-pattern'
-
 import { refEffect, toReactive } from './reactive'
 
 type ArrayMutationMethod =
@@ -45,45 +46,44 @@ type ObjectHasFunctions<T> =
       ? true
       : false
 
-export type NullableLeaf<T> =
-  IsAny<T> extends true
-    ? any
-    : {
-        [K in keyof T]: T[K] extends any[]
-          ? NullableLeaf<T[K]> | null
-          : T[K] extends object
-            ? [ObjectHasFunctions<T[K]>] extends [true]
-              ? T[K] | null
-              : Simplify<NullableLeaf<T[K]>>
-            : T[K] | null
-      }
+export type NullableDeep<T> =
+  GetDiscriminator<T> extends infer Discriminator
+    ? T extends object
+      ? T extends any[]
+        ? NullableDeep<T[number]>[] | null
+        : ObjectHasFunctions<T> extends true
+          ? T | null
+          :
+              | Simplify<{
+                  [K in keyof T]: K extends Discriminator ? T[K] : NullableDeep<T[K]>
+                }>
+              | (keyof PickIndexSignature<T> extends never ? null : never)
+      : T | null
+    : never
 
-export type FormSchema = SomeZodObject | ZodRecord | ZodDiscriminatedUnion<any, any>
-type FormValues<Schema extends FormSchema> = NullableLeaf<z.infer<Schema>>
+export type FormSchema = ZodObject | ZodRecord | ZodDiscriminatedUnion
+type FormData<Schema extends FormSchema> = NonNullable<NullableDeep<z.infer<Schema>>>
 
 export const extendsSymbol = Symbol('extends')
 
-type MaybeGetter<T> = T | (() => T)
+type MaybeGetter<T extends object> = T | (() => T)
 
 export interface FormOptions<
   Schema extends FormSchema,
   Output extends z.infer<Schema> = z.infer<Schema>,
 > {
   schema: Schema
-  // TODO: use z.input for sourceValues & z.output for submit ???
-  sourceValues: MaybeGetter<WritableDeep<NullableLeaf<Output>>>
+  sourceValues: MaybeGetter<Writable<FormData<Schema>>>
   submit: (ctx: { values: Output }) => Promise<void | { success: boolean }>
 
   [extendsSymbol]?: {
-    $use?: <T>(
-      field: FormFieldInternal<T, ZodTypeAny>,
-    ) => Omit<FormField<T, ZodTypeAny>, keyof typeof field>
+    $use?: <T>(field: FormFieldInternal<T>) => Omit<FormField<T>, keyof typeof field>
   }
 }
 
 const updatePathSymbol = Symbol('updatePath')
 
-interface FormFieldInternal<T, V extends ZodTypeAny> {
+interface FormFieldInternal<T> {
   errors: Ref<string[]>
   value: Readonly<Ref<T>>
   handleChange: (value: T) => void
@@ -94,15 +94,15 @@ interface FormFieldInternal<T, V extends ZodTypeAny> {
   isChanged: ComputedRef<boolean>
   path: string
   key: string
-  validator: V
-  $?: FormFields<AnyZodObject>
+  validator: ZodType | undefined
+  $?: BuildFormFieldAccessors<any>
   [updatePathSymbol]: (newPath: string) => void
 }
 
-export interface FormField<T, V extends ZodTypeAny> extends Omit<FormFieldInternal<T, V>, '$'> {
-  $: V extends FormSchema ? FormFields<V> : never
+export interface FormField<T> extends Omit<FormFieldInternal<T>, '$'> {
+  $: BuildFormFieldAccessors<T>
 }
-export type FormFieldProps<T> = { field: FormField<T, ZodTypeAny> }
+export type FormFieldProps<T> = { field: FormField<NullableDeep<T>> }
 
 function clone<const T>(value: T): T {
   return klona(value)
@@ -110,16 +110,16 @@ function clone<const T>(value: T): T {
 
 export function useFormCore<
   const Schema extends FormSchema,
-  Data extends FormValues<Schema> = FormValues<Schema>,
+  const Data extends FormData<Schema> = FormData<Schema>,
 >(formOpts: FormOptions<Schema>) {
   // console.debug('useFormCore()')
 
-  const sourceValues = toRef(formOpts.sourceValues) as Ref<Data>
+  const sourceValues = toRef(formOpts.sourceValues) as unknown as Ref<Data>
   const formUpdateCount = ref(0)
   const isSubmitting = ref(false)
   const disabled = computed(() => isSubmitting.value)
 
-  const formError = ref<ZodError<Data>>()
+  const formError = ref<ZodError<output<Schema>>>()
   const _formDataRef = ref(clone(sourceValues.value)) as Ref<Data>
   const formData = toReactive(_formDataRef) as Data
 
@@ -146,10 +146,10 @@ export function useFormCore<
     reset()
   })
 
-  type FieldCacheMeta = { $field: FormFieldInternal<unknown, ZodTypeAny> }
+  type FieldCacheMeta = { $field: FormFieldInternal<unknown> }
   const fieldCache: Record<string, FieldCacheMeta | undefined> = {}
 
-  const fieldsCache = new Map<string, ComputedRef<BuildFormFieldAccessors<unknown, ZodTypeAny>[]>>()
+  const fieldsCache = new Map<string, ComputedRef<BuildFormFieldAccessors<any>[]>>()
 
   const observedFormData = onChange(
     formData,
@@ -204,7 +204,7 @@ export function useFormCore<
 
   function createFormFieldProxy(path = '') {
     // console.debug('createFormFieldProxy():', path)
-    return new Proxy(Object.create(null) as FormFields<Schema>, {
+    return new Proxy(Object.create(null) as BuildFormFieldAccessors<Data>, {
       ownKeys() {
         const fieldValue = getProperty(formData, path, undefined)
         // console.debug('ownKeys():', path, fieldValue)
@@ -226,13 +226,8 @@ export function useFormCore<
           if (!fields) {
             const _fields = computed(
               () =>
-                fieldValue.value?.map(
-                  (_, index) =>
-                    createFormFieldProxy(`${path}[${index}]`) as BuildFormFieldAccessors<
-                      unknown,
-                      ZodTypeAny
-                    >,
-                ) ?? [],
+                fieldValue.value?.map((_, index) => createFormFieldProxy(`${path}[${index}]`)) ??
+                [],
             )
             fieldsCache.set(iteratorPath, _fields)
             fields = _fields
@@ -272,14 +267,8 @@ export function useFormCore<
 
         if (prop === '$use') {
           return <T extends DeepReadonly<any>>(
-            $opts: Parameters<FormFieldAccessor<T, ZodTypeAny>['$use']>[0] &
-              Parameters<
-                FormFieldAccessorDiscriminator<
-                  T,
-                  string,
-                  ZodDiscriminatedUnion<string, any[]>
-                >['$use']
-              >[0],
+            $opts: Parameters<FormFieldAccessor<T>['$use']>[0] &
+              Parameters<FormFieldAccessorDiscriminator<T, string>['$use']>[0],
           ) => {
             const cachedField = getProperty(fieldCache, `${path}.$field`, undefined)
             if (cachedField) {
@@ -320,7 +309,6 @@ export function useFormCore<
               if (formUpdateCount.value === 0) updateCount.value = 0
             })
 
-            // TODO: remove this in the future, provide validation meta automatically
             const fieldValidator = getValidatorByPath(
               formOpts.schema,
 
@@ -408,10 +396,9 @@ export function useFormCore<
               value: readonly(fieldValue) as Ref<T>,
               path,
               key: `${path}@${now}`,
-              // this is undefined on unsupported validators
-              validator: fieldValidator!,
+              validator: fieldValidator,
               [updatePathSymbol]: updatePath,
-            } satisfies FormFieldInternal<T, ZodTypeAny>)
+            } satisfies FormFieldInternal<T>)
 
             Object.defineProperty(field, '$', {
               get() {
@@ -440,7 +427,7 @@ export function useFormCore<
   }
 
   function validateForm() {
-    const result = formOpts.schema.safeParse(formData) as SafeParseReturnType<Data, Data>
+    const result = formOpts.schema.safeParse(formData) as ZodSafeParseResult<z.infer<Schema>>
     if (result.success) {
       formError.value = undefined
       return result.data
@@ -491,15 +478,11 @@ export type FormFieldTranslator<T> = {
   get: (v: T) => T
   set: (v: T) => T
 }
-type FormFieldAccessor<T, V extends ZodTypeAny> = {
-  $use: (opts?: { translate?: FormFieldTranslator<T> }) => FormField<T, V>
+type FormFieldAccessor<T> = {
+  $use: (opts?: { translate?: FormFieldTranslator<T> }) => FormField<T>
 }
 
-type FormFieldAccessorDiscriminator<
-  T,
-  Discriminator extends string,
-  V extends ZodDiscriminatedUnion<Discriminator, any>,
-> = {
+type FormFieldAccessorDiscriminator<T, Discriminator extends string> = {
   $use: <
     Opts extends {
       discriminator?: Discriminator
@@ -507,107 +490,85 @@ type FormFieldAccessorDiscriminator<
   >(
     opts?: Opts,
   ) => Opts extends { discriminator: string }
-    ? V extends ZodDiscriminatedUnion<infer DDiscriminator, infer Options>
-      ? {
-          [D in T[Extract<keyof T, DDiscriminator>] & string]: Simplify<
-            {
-              [K in DDiscriminator & string]: D
-            } & {
-              $field: FormFields<
-                // Extract<
-                //   T,
-                //   {
-                //     [K in Discriminator & string]: D | null
-                //   }
-                // >
-                Extract<
-                  Options[number],
-                  ZodObject<{ [K in DDiscriminator & string]: ZodLiteral<D> }>
-                >
-              >
-            }
-          >
-        }[T[Extract<keyof T, DDiscriminator>] & string]
-      : never
-    : FormField<T, V>
+    ? {
+        [D in T[Extract<keyof T, Discriminator>] & string]: Simplify<
+          Record<Discriminator, D> & {
+            $field: BuildFormFieldAccessors<Extract<T, Record<Discriminator, D>>, true>
+          }
+        >
+      }[T[Extract<keyof T, Discriminator>] & string]
+    : FormField<T>
 }
 
-export type FormFields<Schema extends FormSchema> = BuildFormFieldAccessors<
-  FormValues<Schema>,
-  Schema
->
+export const ErrorMessageSymbol: unique symbol = Symbol('ErrorMessageSymbol')
+// type Error<M> = { [ErrorMessageSymbol]: M }
 
-export const _error: unique symbol = Symbol('_error')
-type Error<M> = { [_error]: M }
+// const _schema = z.object({ list: z.array(z.object({ name: z.string() })) })
+// type TestTestTestTestTestTestTestTestTestTest = BuildFormFieldAccessors<FormData<typeof _schema>>
+// const asdasdas = {} as TestTestTestTestTestTestTestTestTestTest
 
-type BuildFormFieldAccessors<T, V extends ZodTypeAny> = [IsAny<T>] extends [true]
-  ? FormFieldAccessor<any, ZodTypeAny>
-  : [T] extends [unknown[] | null]
-    ? V extends ZodNullable<ZodTypeAny>
-      ? BuildFormFieldAccessors<T, V['_def']['innerType']>
-      : V extends ZodEffects<infer Output>
-        ? BuildFormFieldAccessors<T, Output>
-        : V extends ZodArray<ZodTypeAny>
-          ? {
-              at: (
-                index: number,
-              ) => BuildFormFieldAccessors<Exclude<T, null>[number], V['element']> | undefined
-              delete: (key: string) => void
-              [Symbol.iterator]: () => ArrayIterator<
-                Reactive<BuildFormFieldAccessors<Exclude<T, null>[number], V['element']>>
-              >
-            } & FormFieldAccessor<T, V>
-          : V extends AnyZodTuple
-            ? {
-                at: <const I extends number>(
-                  index: I,
-                ) => BuildFormFieldAccessors<Exclude<T, null>[I], V['items'][I]> | undefined
-                delete: (key: string) => void
-                [Symbol.iterator]: () => ArrayIterator<
-                  Reactive<BuildFormFieldAccessors<Exclude<T, null>[number], V['items'][number]>>
-                >
-              } & FormFieldAccessor<T, V>
-            : Error<'array validator type not supported'>
-    : ObjectHasFunctions<T> extends true
-      ? FormFieldAccessor<T, V>
-      : V extends ZodReadonly<infer Output>
-        ? BuildFormFieldAccessors<T extends readonly (infer I)[] ? I[] : T, Output>
-        : [T] extends [Record<string, unknown>]
-          ? V extends AnyZodObject
-            ? FormFieldAccessor<T, V> & {
-                [K in keyof T]: BuildFormFieldAccessors<T[K], V['shape'][K]>
-              }
-            : V extends ZodRecord<ZodTypeAny>
-              ? FormFieldAccessor<T, V> & {
-                  [K in keyof T]: BuildFormFieldAccessors<T[K], V['element']>
-                }
-              : V extends ZodDiscriminatedUnion<infer Discriminator extends string, infer Options>
-                ? Options extends ZodDiscriminatedUnionOption<string>[]
-                  ? {
-                      [O in keyof Options]: BuildFormFieldAccessors<
-                        NullableLeaf<Options[O]['_type']>,
-                        Options[O]
-                      >
-                    }[number] &
-                      FormFieldAccessorDiscriminator<T, Discriminator, V>
-                  : never
-                : Error<'object validator type not supported'>
-          : FormFieldAccessor<T, V>
+// const _asdasd = asdasdas.list.$use().value.value
+// const _asdasd2 = asdasdas.list.at(0)!.$use().value.value?.name
 
-function getValidatorByPath(validator: ZodTypeAny, path: string[]) {
+type GetDiscriminator<T> =
+  IsUnion<T> extends true
+    ? { [K in keyof T as IsStringLiteral<T[K]> extends true ? K : never]: T[K] } extends Record<
+        infer D,
+        any
+      >
+      ? D
+      : never
+    : never
+
+export type FormFields<T> = BuildFormFieldAccessors<NullableDeep<T>>
+
+type BuildFormFieldAccessors<T, StopDiscriminator = false> = [IsAny<T>] extends [true]
+  ? FormFieldAccessor<any>
+  : [T] extends [(infer TT extends unknown[]) | null]
+    ? {
+        at: <const I extends number>(
+          index: I,
+        ) => [undefined] extends [TT[I]]
+          ? undefined
+          : BuildFormFieldAccessors<TT[I]> | (IsTuple<TT> extends true ? never : undefined)
+        delete: (key: string) => void
+        [Symbol.iterator]: () => ArrayIterator<
+          Reactive<BuildFormFieldAccessors<NonNullable<TT>[number]>>
+        >
+      } & FormFieldAccessor<T>
+    : [NonNullable<T>] extends [Record<string, unknown>]
+      ? ObjectHasFunctions<T> extends true
+        ? FormFieldAccessor<T>
+        : GetDiscriminator<NonNullable<T>> extends (StopDiscriminator extends true ? any : never)
+          ? FormFieldAccessor<T> & {
+              [K in keyof NonNullable<T>]: BuildFormFieldAccessors<NonNullable<T>[K]>
+            }
+          : GetDiscriminator<NonNullable<T>> extends infer Discriminator extends string
+            ? NonNullable<T> extends Record<Discriminator, infer Options extends string>
+              ? {
+                  [O in Options]: BuildFormFieldAccessors<
+                    Extract<NonNullable<T>, Record<Discriminator, O>>
+                  >
+                }[Options] &
+                  FormFieldAccessorDiscriminator<NonNullable<T>, Discriminator>
+              : never
+            : never
+      : FormFieldAccessor<T>
+
+function getValidatorByPath(validator: ZodType, path: string[]) {
   // console.debug('getValidatorByPath', validator, path)
   if (path.length === 0) return validator
 
   const [key, ...rest] = path as [string, ...string[]]
 
-  let nextValidator: ZodTypeAny | undefined
+  let nextValidator: ZodType | undefined
 
   if ('shape' in validator) {
-    // eslint-disable-next-line ts/no-unsafe-assignment, ts/no-unsafe-member-access
-    nextValidator = (validator as AnyZodObject).shape[key]
+    // eslint-disable-next-line ts/no-unsafe-assignment
+    nextValidator = (validator as ZodObject).shape[key]
   }
   if ('element' in validator) {
-    nextValidator = (validator as ZodArray<ZodTypeAny>).element
+    nextValidator = (validator as ZodArray<ZodType>).element
   }
 
   if (rest.length === 0 || !nextValidator) {
