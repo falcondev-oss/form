@@ -17,10 +17,14 @@
     "react"
   ],
   "exports": {
-    "./package.json": "./package.json",
-    ".": {
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+    ".": "./src/index.ts"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "import": "./dist/index.js",
+        "require": "./dist/index.cjs"
+      }
     }
   },
   "files": [
@@ -43,7 +47,7 @@
     "zod": "^3.25.74"
   },
   "devDependencies": {
-    "@types/react": "^19.1.8",
+    "@types/react": "^18.3.23",
     "typescript": "^5.8.3",
     "vitest": "^3.2.4"
   }

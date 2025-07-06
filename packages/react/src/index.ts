@@ -110,4 +110,9 @@ export function FormField<T, P extends object>(
   })
 }
 
-export { type FormFieldProps, type NullableDeep } from '@falcondev-oss/form-core'
+export type {
+  FormFieldProps,
+  FormFieldTranslator,
+  FormFields,
+  NullableDeep,
+} from '@falcondev-oss/form-core'

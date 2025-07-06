@@ -21,7 +21,6 @@
   },
   "publishConfig": {
     "exports": {
-      "./package.json": "./package.json",
       ".": {
         "import": "./dist/core.js",
         "require": "./dist/core.cjs"
