@@ -1,8 +1,8 @@
 import type { FormFieldProps, FormOptions, FormSchema } from '@falcondev-oss/form-core'
 import type { Ref } from '@vue/reactivity'
 import type { FunctionComponent, NamedExoticComponent } from 'react'
-import { refEffect } from '@falcondev-oss/form-core/reactive'
 import { extendsSymbol, useFormCore } from '@falcondev-oss/form-core'
+import { refEffect } from '@falcondev-oss/form-core/reactive'
 import { reactive, ref, watch } from '@vue/reactivity'
 import { memo, useEffect, useMemo, useState } from 'react'
 
@@ -36,7 +36,6 @@ export function useForm<const Schema extends FormSchema>(
     //   console.debug('useForm().watch -> rerender', { sourceValues: sourceValuesRef.value })
     // })
 
-    // eslint-disable-next-line react-hooks/rules-of-hooks
     const form = useFormCore({
       ...opts,
       submit: async (...args) => submitFnRef.value(...args),
@@ -112,7 +111,7 @@ export function FormField<T, P extends object>(
 
 export type {
   FormFieldProps,
-  FormFieldTranslator,
   FormFields,
+  FormFieldTranslator,
   NullableDeep,
 } from '@falcondev-oss/form-core'

@@ -1,4 +1,4 @@
-/* eslint-disable ts/no-deprecated */
+import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type { ComputedRef, DeepReadonly, Reactive, Ref } from '@vue/reactivity'
 import type {
   IsAny,
@@ -9,7 +9,7 @@ import type {
   Writable,
 } from 'type-fest'
 import type { IsUnion } from 'type-fest/source/internal'
-import type { StandardSchemaV1 } from '@standard-schema/spec'
+import type { ZodArray, ZodObject, ZodType } from 'zod/v4'
 import { computed, reactive, readonly, ref, shallowReactive, toRef, watch } from '@vue/reactivity'
 import { deleteProperty, getProperty, setProperty } from 'dot-prop'
 import { klona } from 'klona/full'
@@ -17,7 +17,6 @@ import onChange from 'on-change'
 import { isArray, isDeepEqual } from 'remeda'
 import { match, P } from 'ts-pattern'
 import { refEffect, toReactive } from './reactive'
-import type { ZodArray, ZodObject, ZodType } from 'zod/v4'
 
 type ArrayMutationMethod =
   | 'push'
@@ -78,7 +77,8 @@ const updatePathSymbol = Symbol('updatePath')
 interface FormFieldInternal<T> {
   errors: Ref<string[] | undefined>
   value: Readonly<Ref<T>>
-  handleChange(value: T): void
+  // eslint-disable-next-line ts/method-signature-style
+  handleChange(this: void, value: T): void
   handleBlur: () => void
   reset: () => void
   disabled: ComputedRef<boolean>
@@ -373,12 +373,12 @@ export function useFormCore<
                 updateCount.value++
                 formUpdateCount.value++
 
-                if (fieldErrors.value && fieldErrors.value.length > 0) validateField()
+                if (fieldErrors.value && fieldErrors.value.length > 0) void validateField()
               },
               handleBlur: () => {
                 // console.debug(`======== handleBlur (${pathRef.value})`)
 
-                validateField()
+                void validateField()
               },
               reset: () => {
                 updateCount.value = 0
@@ -446,7 +446,7 @@ export function useFormCore<
       isSubmitting.value = true
 
       try {
-        const validationResult = validateForm()
+        const validationResult = await validateForm()
 
         if (!validationResult) {
           isSubmitting.value = false

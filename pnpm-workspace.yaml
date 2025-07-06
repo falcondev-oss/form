@@ -1,2 +1,6 @@
 packages:
   - packages/*
+
+publicHoistPattern:
+  - eslint-plugin-*
+  - '@prettier/plugin-*'
