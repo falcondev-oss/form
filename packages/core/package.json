@@ -49,10 +49,10 @@
     "dot-prop": "^9.0.0",
     "klona": "^2.0.6",
     "on-change": "^5.0.1",
-    "remeda": "^2.24.0",
+    "remeda": "^2.25.0",
     "ts-pattern": "^5.7.1",
     "type-fest": "^4.41.0",
-    "zod": "^3.25.74"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "typescript": "^5.8.3",

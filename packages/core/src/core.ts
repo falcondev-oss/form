@@ -3,7 +3,9 @@ import type { ComputedRef, DeepReadonly, Reactive, Ref } from '@vue/reactivity'
 import type {
   IsAny,
   IsStringLiteral,
+  IsSymbolLiteral,
   IsTuple,
+  IsUnknown,
   PickIndexSignature,
   Simplify,
   Writable,
@@ -28,19 +30,23 @@ type ArrayMutationMethod =
   | 'reverse'
   | 'fill'
 
-type ObjectHasFunctions<T> =
+type ObjectHasFunctionsOrSymbols<T> =
   IsAny<T[keyof T]> extends true
     ? false
-    : [(...args: any[]) => any] extends [T[keyof T]]
-      ? true
-      : false
+    : IsUnknown<T[keyof T]> extends true
+      ? false
+      : [(...args: any[]) => any] extends [NonNullable<T>[keyof NonNullable<T>]]
+        ? true
+        : true extends { [K in keyof T]: IsSymbolLiteral<K> extends true ? true : never }[keyof T]
+          ? true
+          : false
 
 export type NullableDeep<T> =
   GetDiscriminator<T> extends infer Discriminator
     ? T extends object
       ? T extends any[]
         ? NullableDeep<T[number]>[] | null
-        : ObjectHasFunctions<T> extends true
+        : ObjectHasFunctionsOrSymbols<T> extends true
           ? T | null
           :
               | Simplify<{
@@ -535,7 +541,7 @@ type BuildFormFieldAccessors<T, StopDiscriminator = false> = [IsAny<T>] extends 
         >
       } & FormFieldAccessor<T>
     : [NonNullable<T>] extends [Record<string, unknown>]
-      ? ObjectHasFunctions<T> extends true
+      ? ObjectHasFunctionsOrSymbols<T> extends true
         ? FormFieldAccessor<T>
         : GetDiscriminator<NonNullable<T>> extends (StopDiscriminator extends true ? any : never)
           ? FormFieldAccessor<T> & {
@@ -552,6 +558,8 @@ type BuildFormFieldAccessors<T, StopDiscriminator = false> = [IsAny<T>] extends 
               : never
             : never
       : FormFieldAccessor<T>
+
+// type TEST = BuildFormFieldAccessors<ZodObject['_zod']['output']>
 
 function getValidatorByPath(validator: ZodType, path: string[]) {
   // console.debug('getValidatorByPath', validator, path)
