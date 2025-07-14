@@ -93,12 +93,12 @@ interface FormFieldInternal<T> {
   path: string
   key: string
   validator: ZodType | undefined
-  $?: BuildFormFieldAccessors<any>
+  $?: () => BuildFormFieldAccessors<any>
   [updatePathSymbol]: (newPath: string) => void
 }
 
 export interface FormField<T> extends Omit<FormFieldInternal<T>, '$'> {
-  $: BuildFormFieldAccessors<T>
+  $: <TT extends T>() => BuildFormFieldAccessors<TT>
 }
 export type FormFieldProps<T> = { field: FormField<NullableDeep<T>> }
 
@@ -406,7 +406,7 @@ export function useFormCore<
 
             Object.defineProperty(field, '$', {
               get() {
-                return createFormFieldProxy(path)
+                return () => createFormFieldProxy(path)
               },
             })
 
