@@ -43,8 +43,7 @@
   },
   "dependencies": {
     "@falcondev-oss/form-core": "workspace:*",
-    "@vue/reactivity": "^3.5.17",
-    "zod": "^3.25.76"
+    "@vue/reactivity": "^3.5.17"
   },
   "devDependencies": {
     "@types/react": "^18.3.23",
