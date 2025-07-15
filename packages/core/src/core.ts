@@ -83,8 +83,7 @@ const updatePathSymbol = Symbol('updatePath')
 interface FormFieldInternal<T> {
   errors: Ref<string[] | undefined>
   value: Readonly<Ref<T>>
-  // eslint-disable-next-line ts/method-signature-style
-  handleChange(this: void, value: T): void
+  handleChange: (value: T) => void
   handleBlur: () => void
   reset: () => void
   disabled: ComputedRef<boolean>
