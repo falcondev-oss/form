@@ -16,7 +16,7 @@ import { computed, reactive, readonly, ref, shallowReactive, toRef, watch } from
 import { deleteProperty, getProperty, setProperty } from 'dot-prop'
 import { klona } from 'klona/full'
 import onChange from 'on-change'
-import { isArray, isDeepEqual } from 'remeda'
+import { hasSubObject, isArray, isDeepEqual } from 'remeda'
 import { match, P } from 'ts-pattern'
 import { refEffect, toReactive } from './reactive'
 
@@ -442,7 +442,7 @@ export function useFormCore<
   return {
     fields: createFormFieldProxy(),
     isDirty: computed(() => formUpdateCount.value !== 0),
-    isChanged: computed(() => !isDeepEqual<unknown>(formData, sourceValues.value)),
+    isChanged: computed(() => !hasSubObject<object, object>(sourceValues.value, formData)),
     isSubmitting: readonly(isSubmitting),
     data: observedFormData,
     errors: computed(() => formError.value?.issues),
