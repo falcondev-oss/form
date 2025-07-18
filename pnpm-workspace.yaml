@@ -1,6 +1,10 @@
 packages:
   - packages/*
 
+onlyBuiltDependencies:
+  - esbuild
+  - unrs-resolver
+
 publicHoistPattern:
   - eslint-plugin-*
   - '@prettier/plugin-*'
