@@ -379,7 +379,7 @@ export function useFormCore<
               },
               handleBlur: () => {
                 // console.debug(`======== handleBlur (${pathRef.value})`)
-                if (fieldValue.value === undefined || fieldValue.value === null) return
+                if (updateCount.value === 0) return
 
                 void validateField()
               },
