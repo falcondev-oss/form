@@ -1,7 +1,7 @@
 {
   "name": "@falcondev-oss/form-core",
   "type": "module",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "description": "Type-safe, framework agnostic form state library based on @vue/reactivity.",
   "license": "Apache-2.0",
   "repository": "github:falcondev-oss/form",
