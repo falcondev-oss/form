@@ -18,6 +18,7 @@ import { klona } from 'klona/full'
 import onChange from 'on-change'
 import { hasSubObject, isArray, isDeepEqual } from 'remeda'
 import { match, P } from 'ts-pattern'
+import { issuePathToDotNotation } from './helpers'
 import { refEffect, toReactive } from './reactive'
 
 type ArrayMutationMethod =
@@ -321,9 +322,7 @@ export function useFormCore<
                 ? ({
                     issues: formError.value.issues.filter((issue) => {
                       if (!issue.path) return false
-                      const issuePath = issue.path
-                        .map((p) => (typeof p === 'object' ? p.key : p))
-                        .join('.')
+                      const issuePath = issuePathToDotNotation(issue.path)
                       return issuePath === pathRef.value
                     }),
                   } satisfies StandardSchemaV1.FailureResult)
@@ -350,9 +349,7 @@ export function useFormCore<
               fieldError.value = {
                 issues: formResult.issues.filter((issue) => {
                   if (!issue.path) return false
-                  const issuePath = issue.path
-                    .map((p) => (typeof p === 'object' ? p.key : p))
-                    .join('.')
+                  const issuePath = issuePathToDotNotation(issue.path)
                   return issuePath === pathRef.value
                 }),
               } satisfies StandardSchemaV1.FailureResult
