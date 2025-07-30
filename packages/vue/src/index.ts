@@ -1,5 +1,5 @@
 import type { FormOptions, FormSchema } from '@falcondev-oss/form-core'
-import type { MaybeRef, MaybeRefOrGetter, WritableComputedRef } from 'vue'
+import type { MaybeRefOrGetter, Ref, ShallowRef, WritableComputedRef } from 'vue'
 import { extendsSymbol, useFormCore } from '@falcondev-oss/form-core'
 import { computed, toValue } from 'vue'
 
@@ -9,10 +9,12 @@ declare module '@falcondev-oss/form-core' {
   }
 }
 
+type MaybeNonWritableRef<T> = T | Ref<T, T> | ShallowRef<T, T>
+
 export type FormHandle = {
-  isChanged: MaybeRef<boolean>
-  isSubmitting: MaybeRef<boolean>
-  errors: MaybeRef<unknown> | undefined
+  isChanged: MaybeNonWritableRef<boolean>
+  isSubmitting: MaybeNonWritableRef<boolean>
+  errors: MaybeNonWritableRef<unknown> | undefined
   submit: () => Promise<unknown>
 }
 
