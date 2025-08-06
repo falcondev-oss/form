@@ -7,21 +7,13 @@ import type {
   IsTuple,
   IsUnknown,
   PickIndexSignature,
+  Primitive,
   Simplify,
   Writable,
 } from 'type-fest'
 import type { IsUnion } from 'type-fest/source/internal'
 import type { ZodArray, ZodObject, ZodType } from 'zod/v4'
-import {
-  computed,
-  markRaw,
-  reactive,
-  readonly,
-  ref,
-  shallowReactive,
-  toRef,
-  watch,
-} from '@vue/reactivity'
+import { computed, markRaw, reactive, readonly, ref, toRef, watch } from '@vue/reactivity'
 import { deleteProperty, getProperty, setProperty } from 'dot-prop'
 import { klona } from 'klona/full'
 import onChange from 'on-change'
@@ -90,9 +82,10 @@ export interface FormOptions<
 
 const updatePathSymbol = Symbol('updatePath')
 
+export type NonPrimitiveReadonly<T> = T extends Primitive ? T : Readonly<T>
 type FormFieldInternal<T> = {
   errors: string[] | undefined
-  value: Readonly<T>
+  value: NonPrimitiveReadonly<T>
   handleChange: (value: T) => void
   handleBlur: () => void
   reset: () => void
@@ -403,7 +396,7 @@ export function useFormCore<
                 () => !isDeepEqual<unknown>(fieldValue.value, initialValue.value),
               ),
               isDirty: computed(() => updateCount.value !== 0),
-              value: readonly(fieldValue) as Ref<T>,
+              value: readonly(fieldValue) as Ref<NonPrimitiveReadonly<T>>,
               path,
               key: `${path}@${now}`,
               validator: fieldValidator ? markRaw(fieldValidator) : undefined,

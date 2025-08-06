@@ -3,7 +3,7 @@ import type { Ref } from '@vue/reactivity'
 import type { FunctionComponent, NamedExoticComponent } from 'react'
 import { extendsSymbol, useFormCore } from '@falcondev-oss/form-core'
 import { refEffect } from '@falcondev-oss/form-core/reactive'
-import { reactive, ref, watch } from '@vue/reactivity'
+import { ref, watch } from '@vue/reactivity'
 import { memo, useEffect, useMemo, useState } from 'react'
 
 export type FieldModelProps<T> = {
@@ -54,10 +54,10 @@ export function useForm<const Schema extends FormSchema>(
           })
 
           return {
-            model: reactive({
+            model: {
               value: field.value,
               onUpdate: field.handleChange,
-            }),
+            },
             [tick]: tickRef,
           }
         },
