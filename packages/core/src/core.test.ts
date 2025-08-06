@@ -72,11 +72,11 @@ describe('field', () => {
     const nestedField = form.fields.array.at(0)!.name.$use()
     const ageField = form.fields.age.$use()
 
-    expect(nestedField.errors.value).toEqual(undefined)
-    expect(ageField.errors.value).toEqual(undefined)
+    expect(nestedField.errors).toEqual(undefined)
+    expect(ageField.errors).toEqual(undefined)
 
     await form.submit()
-    expect(nestedField.errors.value).toEqual(['Invalid input: expected string, received null'])
-    expect(ageField.errors.value).toEqual(['Invalid input: expected number, received null'])
+    expect(nestedField.errors).toEqual(['Invalid input: expected string, received null'])
+    expect(ageField.errors).toEqual(['Invalid input: expected number, received null'])
   })
 })

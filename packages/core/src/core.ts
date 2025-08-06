@@ -12,7 +12,16 @@ import type {
 } from 'type-fest'
 import type { IsUnion } from 'type-fest/source/internal'
 import type { ZodArray, ZodObject, ZodType } from 'zod/v4'
-import { computed, reactive, readonly, ref, shallowReactive, toRef, watch } from '@vue/reactivity'
+import {
+  computed,
+  markRaw,
+  reactive,
+  readonly,
+  ref,
+  shallowReactive,
+  toRef,
+  watch,
+} from '@vue/reactivity'
 import { deleteProperty, getProperty, setProperty } from 'dot-prop'
 import { klona } from 'klona/full'
 import onChange from 'on-change'
@@ -81,15 +90,15 @@ export interface FormOptions<
 
 const updatePathSymbol = Symbol('updatePath')
 
-interface FormFieldInternal<T> {
-  errors: Ref<string[] | undefined>
-  value: Readonly<Ref<T>>
+type FormFieldInternal<T> = {
+  errors: string[] | undefined
+  value: Readonly<T>
   handleChange: (value: T) => void
   handleBlur: () => void
   reset: () => void
-  disabled: ComputedRef<boolean>
-  isDirty: ComputedRef<boolean>
-  isChanged: ComputedRef<boolean>
+  disabled: boolean
+  isDirty: boolean
+  isChanged: boolean
   path: string
   key: string
   validator: ZodType | undefined
@@ -182,7 +191,7 @@ export function useFormCore<
             return
           }
 
-          cachedField.sort((a, b) => compareFn(a?.$field.value.value, b?.$field.value.value))
+          cachedField.sort((a, b) => compareFn(a?.$field.value, b?.$field.value))
           formDataField.sort(compareFn)
         })
         .with({ name: P.union('push') }, () => {}) // noop
@@ -356,7 +365,7 @@ export function useFormCore<
             }
 
             const now = Date.now()
-            const field = shallowReactive({
+            const field = reactive({
               disabled,
               errors: fieldErrors,
               handleChange: (_value: T) => {
@@ -397,9 +406,9 @@ export function useFormCore<
               value: readonly(fieldValue) as Ref<T>,
               path,
               key: `${path}@${now}`,
-              validator: fieldValidator,
+              validator: fieldValidator ? markRaw(fieldValidator) : undefined,
               [updatePathSymbol]: updatePath,
-            } satisfies FormFieldInternal<T>)
+            }) satisfies FormFieldInternal<T>
 
             Object.defineProperty(field, '$', {
               get() {

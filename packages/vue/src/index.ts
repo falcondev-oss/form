@@ -37,10 +37,10 @@ export function useForm<const Schema extends FormSchema>(
   const form = useFormCore({
     ...opts,
     [extendsSymbol]: {
-      $use: ({ value, handleChange }) => {
+      $use: (field) => {
         const model = computed({
-          get: () => value.value,
-          set: (v: typeof value.value) => handleChange(v),
+          get: () => field.value,
+          set: (v: typeof field.value) => field.handleChange(v),
         })
 
         return { model }
