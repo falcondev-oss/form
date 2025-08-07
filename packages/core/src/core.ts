@@ -371,6 +371,7 @@ export function useFormCore<
               )
               if (!formResult.issues) {
                 fieldError.value = undefined
+                fieldErrors.reset()
                 return
               }
 
