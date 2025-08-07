@@ -1,3 +1,4 @@
+import { watch } from '@vue/reactivity'
 import { describe, expect, test, vi } from 'vitest'
 import z from 'zod'
 import { useFormCore } from './core'
@@ -46,6 +47,30 @@ describe('form', () => {
       expect(form.data.name).toBe('Jane Doe')
       expect(form.isChanged.value).toBe(true)
     })
+  })
+
+  test('data', () => {
+    const form = useFormCore({
+      schema: z.object({
+        name: z.string(),
+      }),
+      sourceValues: {
+        name: 'John Doe',
+      },
+      async submit() {},
+    })
+
+    expect(form.data.name).toBe('John Doe')
+
+    const spy = vi.fn()
+
+    watch(
+      () => form.data.name,
+      (value) => void spy(value),
+    )
+
+    form.fields.name.$use().handleChange('Isaac Newton')
+    expect(spy).toHaveBeenCalledWith('Isaac Newton')
   })
 })
 
