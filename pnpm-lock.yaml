@@ -38,6 +38,9 @@ importers:
       dot-prop:
         specifier: ^9.0.0
         version: 9.0.0
+      hookable:
+        specifier: ^5.5.3
+        version: 5.5.3
       klona:
         specifier: ^2.0.6
         version: 2.0.6

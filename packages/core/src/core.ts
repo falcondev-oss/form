@@ -1,5 +1,6 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type { ComputedRef, DeepReadonly, Reactive, Ref } from '@vue/reactivity'
+import type { NestedHooks } from 'hookable'
 import type {
   IsAny,
   IsStringLiteral,
@@ -15,6 +16,7 @@ import type { IsUnion } from 'type-fest/source/internal'
 import type { ZodArray, ZodObject, ZodType } from 'zod/v4'
 import { computed, markRaw, reactive, readonly, ref, toRef, watch } from '@vue/reactivity'
 import { deleteProperty, getProperty, setProperty } from 'dot-prop'
+import { createHooks } from 'hookable'
 import { klona } from 'klona/full'
 import onChange from 'on-change'
 import { hasSubObject, isArray, isDeepEqual } from 'remeda'
@@ -74,16 +76,32 @@ export interface FormOptions<
   schema: Schema
   sourceValues: MaybeGetter<Writable<FormData<Schema>>>
   submit: (ctx: { values: Output }) => Promise<void | { success: boolean }>
-
+  hooks?: NestedHooks<FormHooks<Schema>>
   [extendsSymbol]?: {
     $use?: <T>(field: FormFieldInternal<T>) => Omit<FormField<T>, keyof typeof field>
   }
 }
 
+export interface FormHooks<
+  Schema extends FormSchema,
+  Output extends StandardSchemaV1.InferOutput<Schema> = StandardSchemaV1.InferOutput<Schema>,
+> {
+  beforeSubmit: (ctx: { values: Output }) => Promise<void> | void
+  afterSubmit: (result: { success: boolean }) => Promise<void> | void
+  // beforeReset: () => Promise<void> | void
+  // afterReset: () => Promise<void> | void
+  beforeValidate: () => Promise<void> | void
+  afterValidate: (result: StandardSchemaV1.Result<Schema>) => Promise<void> | void
+  // beforeFieldReset: () => Promise<void> | void
+  // afterFieldReset: () => Promise<void> | void
+  // beforeFieldChange: (field: FormFieldInternal<unknown>, newValue: unknown | null) => void
+  // afterFieldChange: (field: FormFieldInternal<unknown>, updatedValue: unknown | null) => void
+}
+
 const updatePathSymbol = Symbol('updatePath')
 
 export type NonPrimitiveReadonly<T> = T extends Primitive ? T : Readonly<T>
-type FormFieldInternal<T> = {
+export type FormFieldInternal<T> = {
   errors: string[] | undefined
   value: NonPrimitiveReadonly<T>
   handleChange: (value: T) => void
@@ -113,6 +131,8 @@ export function useFormCore<
   const Data extends FormData<Schema> = FormData<Schema>,
 >(formOpts: FormOptions<Schema>) {
   // console.debug('useFormCore()')
+  const hooks = createHooks<FormHooks<Schema>>()
+  if (formOpts.hooks) hooks.addHooks(formOpts.hooks)
 
   const sourceValues = toRef(formOpts.sourceValues) as unknown as Ref<Data>
   const formUpdateCount = ref(0)
@@ -367,6 +387,11 @@ export function useFormCore<
                 // console.debug(
                 //   `======== handleChange (${pathRef.value}): '${JSON.stringify(_value)}'`,
                 // )
+                // void hooks.callHook(
+                //   'beforeFieldChange',
+                //   field as FormFieldInternal<unknown>,
+                //   _value,
+                // )
 
                 fieldValue.value = _value
 
@@ -377,6 +402,8 @@ export function useFormCore<
                 updateCount.value++
                 formUpdateCount.value++
 
+                // void hooks.callHook('afterFieldChange', field as FormFieldInternal<unknown>, value)
+
                 if (fieldErrors.value && fieldErrors.value.length > 0) void validateField()
               },
               handleBlur: () => {
@@ -386,11 +413,13 @@ export function useFormCore<
                 void validateField()
               },
               reset: () => {
+                // await hooks.callHook('beforeFieldReset')
+
                 updateCount.value = 0
-
                 setProperty(formData, pathRef.value, initialValue.value)
-
                 fieldError.value = undefined
+
+                // await hooks.callHook('afterFieldReset')
               },
               isChanged: computed(
                 () => !isDeepEqual<unknown>(fieldValue.value, initialValue.value),
@@ -430,7 +459,10 @@ export function useFormCore<
   }
 
   async function validateForm() {
+    await hooks.callHook('beforeValidate')
     const result = await Promise.resolve(formOpts.schema['~standard'].validate(formData))
+    await hooks.callHook('afterValidate', result as StandardSchemaV1.Result<Schema>)
+
     if (!result.issues) {
       formError.value = undefined
       return result.value
@@ -458,15 +490,14 @@ export function useFormCore<
           return { success: false }
         }
 
-        const submitResult = await formOpts.submit({ values: validationResult })
-        // undefined submitResult is successful
-        if ((submitResult ?? {}).success === false) {
-          return { success: false }
-        }
+        const ctx = { values: validationResult }
+        await hooks.callHook('beforeSubmit', ctx)
+        const submitResult = (await formOpts.submit(ctx)) ?? { success: true }
+        await hooks.callHook('afterSubmit', submitResult)
 
-        formUpdateCount.value = 0
+        if (submitResult.success) formUpdateCount.value = 0
 
-        return { success: true }
+        return submitResult
       } catch (err) {
         console.error(err)
         return { success: false }

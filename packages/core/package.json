@@ -50,6 +50,7 @@
     "@standard-schema/spec": "^1.0.0",
     "@vue/reactivity": "^3.5.17",
     "dot-prop": "^9.0.0",
+    "hookable": "^5.5.3",
     "klona": "^2.0.6",
     "on-change": "^5.0.1",
     "remeda": "^2.25.0",
