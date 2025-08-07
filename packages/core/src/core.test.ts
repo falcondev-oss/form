@@ -80,6 +80,33 @@ describe('field', () => {
     expect(nestedField.errors).toEqual(['Invalid input: expected string, received null'])
     expect(ageField.errors).toEqual(['Invalid input: expected number, received null'])
   })
+
+  test('translate', async () => {
+    const form = useFormCore({
+      schema: z.object({
+        date: z.iso.date(),
+      }),
+      sourceValues: {
+        date: '2025-01-01',
+      },
+      async submit() {},
+    })
+
+    const field = form.fields.date.$use({
+      translate: {
+        get: (v) => (v ? new Date(v) : null),
+        set: (v) => v?.toISOString() ?? null,
+      },
+    })
+
+    expect(field.value).toStrictEqual(new Date('2025-01-01'))
+
+    const now = new Date()
+    field.handleChange(now)
+
+    expect(field.value).toBe(now)
+    expect(form.data.date).toBe(now.toISOString())
+  })
 })
 
 describe('hooks', () => {

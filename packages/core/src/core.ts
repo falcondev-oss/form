@@ -2,6 +2,7 @@ import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type { ComputedRef, DeepReadonly, Reactive, Ref } from '@vue/reactivity'
 import type { NestedHooks } from 'hookable'
 import type {
+  IfUnknown,
   IsAny,
   IsStringLiteral,
   IsSymbolLiteral,
@@ -509,12 +510,12 @@ export function useFormCore<
   }
 }
 
-export type FormFieldTranslator<T> = {
-  get: (v: T) => T
-  set: (v: T) => T
+export type FormFieldTranslator<T, O> = {
+  get: (v: T) => O
+  set: (v: O) => T
 }
 type FormFieldAccessor<T> = {
-  $use: (opts?: { translate?: FormFieldTranslator<T> }) => FormField<T>
+  $use: <O>(opts?: { translate?: FormFieldTranslator<T, O> }) => FormField<IfUnknown<O, T, O>>
 }
 
 type FormFieldAccessorDiscriminator<T, Discriminator extends string> = {
