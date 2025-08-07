@@ -12,9 +12,9 @@ describe('react', () => {
         schema: z.object({
           name: z.string(),
         }),
-        sourceValues: {
+        sourceValues: () => ({
           name: 'John Doe',
-        },
+        }),
         async submit() {},
       }),
     )
