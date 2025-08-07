@@ -5,7 +5,7 @@ import { extendsSymbol, useFormCore } from '@falcondev-oss/form-core'
 import { computed, toValue } from 'vue'
 
 declare module '@falcondev-oss/form-core' {
-  interface FormField<T> {
+  interface FormFieldExtend<T> {
     model: WritableComputedRef<T>
   }
 }

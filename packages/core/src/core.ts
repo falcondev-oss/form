@@ -79,7 +79,7 @@ export interface FormOptions<
   submit: (ctx: { values: Output }) => Promise<void | { success: boolean }>
   hooks?: NestedHooks<FormHooks<Schema>>
   [extendsSymbol]?: {
-    $use?: <T>(field: FormFieldInternal<T>) => Omit<FormField<T>, keyof typeof field>
+    $use?: <T>(field: FormFieldInternal<T>) => FormFieldExtend<T>
   }
 }
 
@@ -118,7 +118,12 @@ export type FormFieldInternal<T> = {
   [updatePathSymbol]: (newPath: string) => void
 }
 
-export interface FormField<T> extends Omit<FormFieldInternal<T>, '$'> {
+// eslint-disable-next-line unused-imports/no-unused-vars
+export interface FormFieldExtend<T> {}
+
+export interface FormField<T>
+  extends Omit<FormFieldInternal<T>, '$'>,
+    Reactive<FormFieldExtend<T>> {
   $: <TT extends T>() => BuildFormFieldAccessors<TT>
 }
 export type FormFieldProps<T> = { field: FormField<NullableDeep<T>> }

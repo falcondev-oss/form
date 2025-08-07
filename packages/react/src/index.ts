@@ -1,10 +1,11 @@
 import type { FormFieldProps, FormOptions, FormSchema } from '@falcondev-oss/form-core'
-import type { Ref } from '@vue/reactivity'
+import type { ComputedRef } from '@vue/reactivity'
 import type { FunctionComponent, NamedExoticComponent } from 'react'
 import { extendsSymbol, useFormCore } from '@falcondev-oss/form-core'
 import { refEffect } from '@falcondev-oss/form-core/reactive'
-import { ref, watch } from '@vue/reactivity'
+import { computed, ref, watch } from '@vue/reactivity'
 import { memo, useEffect, useMemo, useState } from 'react'
+import { tick } from './util'
 
 export type FieldModelProps<T> = {
   model: FieldModel<T>
@@ -15,12 +16,10 @@ export type FieldModel<T> = {
   onUpdate: (newValue: T) => void
 }
 
-const tick = Symbol('tick')
-
 declare module '@falcondev-oss/form-core' {
-  interface FormField<T> {
-    model: FieldModel<T>
-    [tick]: Ref<number>
+  interface FormFieldExtend<T> {
+    model: ComputedRef<FieldModel<T>>
+    [tick]: number // Ref<number> // wait for https://github.com/vuejs/core/pull/13740
   }
 }
 
@@ -47,18 +46,22 @@ export function useForm<const Schema extends FormSchema>(
 
           const tickRef = ref(0)
 
-          watch([field.errors, field.value], () => {
-            // console.debug('$use().watch -> rerender', { errors: field.errors.value })
-            tickRef.value = Date.now()
-            setTick(Date.now())
-          })
+          watch(
+            () => [field.errors, field.value],
+            () => {
+              // console.debug('$use().watch -> rerender', { errors: field.errors })
+              tickRef.value = Date.now()
+              setTick(Date.now())
+            },
+          )
 
           return {
-            model: {
+            // this needs to be a computed to ensure reactivity, because useForm is memoized
+            model: computed(() => ({
               value: field.value,
               onUpdate: field.handleChange,
-            },
-            [tick]: tickRef,
+            })),
+            [tick]: tickRef as unknown as number, // wait for https://github.com/vuejs/core/pull/13740
           }
         },
       },
@@ -100,11 +103,11 @@ export function FormField<T, P extends object>(
   const prevTick = ref<unknown>()
 
   return memo(component, (prev, next) => {
-    if (prevTick.value === next.field[tick].value) {
+    if (prevTick.value === next.field[tick]) {
       return true // skip rerender
     }
 
-    prevTick.value = prev.field[tick].value
+    prevTick.value = prev.field[tick]
     return false // rerender
   })
 }
