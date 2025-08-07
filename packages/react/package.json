@@ -1,7 +1,7 @@
 {
   "name": "@falcondev-oss/form-react",
   "type": "module",
-  "version": "0.7.3",
+  "version": "0.7.4",
   "description": "Type-safe, framework agnostic form state library based on @vue/reactivity.",
   "license": "Apache-2.0",
   "repository": "github:falcondev-oss/form",
