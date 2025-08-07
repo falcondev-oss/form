@@ -16,6 +16,7 @@ export type FormHandle = {
   isSubmitting: MaybeNonWritableRef<boolean>
   errors: MaybeNonWritableRef<unknown> | undefined
   submit: () => Promise<unknown>
+  reset: () => void
 }
 
 export function useFormHandles(forms: MaybeRefOrGetter<FormHandle[]>) {
@@ -27,6 +28,9 @@ export function useFormHandles(forms: MaybeRefOrGetter<FormHandle[]>) {
       isSubmitting: forms_.some((f) => toValue(f.isSubmitting)),
       errors: forms_.find((f) => toValue(f.errors))?.errors,
       submit: async () => Promise.all(forms_.map(async (f) => f.submit())),
+      reset: () => {
+        for (const f of forms_) f.reset()
+      },
     } satisfies FormHandle
   })
 }
