@@ -94,6 +94,9 @@ importers:
       '@falcondev-oss/form-core':
         specifier: workspace:*
         version: link:../core
+      hookable:
+        specifier: ^5.5.3
+        version: 5.5.3
       vue:
         specifier: ^3.5.13
         version: 3.5.17(typescript@5.8.3)

@@ -1,4 +1,5 @@
-import type { FormOptions, FormSchema } from '@falcondev-oss/form-core'
+import type { FormHooks, FormOptions, FormSchema } from '@falcondev-oss/form-core'
+import type { Hookable } from 'hookable'
 import type { MaybeRefOrGetter, Ref, ShallowRef, WritableComputedRef } from 'vue'
 import { extendsSymbol, useFormCore } from '@falcondev-oss/form-core'
 import { computed, toValue } from 'vue'
@@ -17,6 +18,7 @@ export type FormHandle = {
   errors: MaybeNonWritableRef<unknown> | undefined
   submit: () => Promise<unknown>
   reset: () => void
+  hooks: Hookable<FormHooks<FormSchema>>
 }
 
 export function useFormHandles(forms: MaybeRefOrGetter<FormHandle[]>) {
@@ -31,7 +33,7 @@ export function useFormHandles(forms: MaybeRefOrGetter<FormHandle[]>) {
       reset: () => {
         for (const f of forms_) f.reset()
       },
-    } satisfies FormHandle
+    } satisfies Omit<FormHandle, 'hooks'>
   })
 }
 

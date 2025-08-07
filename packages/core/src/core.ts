@@ -472,6 +472,7 @@ export function useFormCore<
   }
 
   return {
+    hooks,
     fields: createFormFieldProxy(),
     isDirty: computed(() => formUpdateCount.value !== 0),
     isChanged: computed(() => !hasSubObject<object, object>(sourceValues.value, formData)),
