@@ -218,31 +218,33 @@ describe('hooks', () => {
     expect(beforeValidateSpy).toHaveBeenCalledBefore(afterValidateSpy)
   })
 
-  // test('beforeFieldChange, afterFieldChange', () => {
-  //   const beforeFieldChangeSpy = vi.fn()
-  //   const afterFieldChangeSpy = vi.fn()
+  test('beforeFieldChange, afterFieldChange', async () => {
+    const beforeFieldChangeSpy = vi.fn()
+    const afterFieldChangeSpy = vi.fn()
 
-  //   const form = useFormCore({
-  //     schema: z.object({
-  //       name: z.string(),
-  //     }),
-  //     sourceValues: {
-  //       name: 'John',
-  //     },
-  //     hooks: {
-  //       beforeFieldChange: beforeFieldChangeSpy,
-  //       afterFieldChange: afterFieldChangeSpy,
-  //     },
-  //     async submit() {},
-  //   })
+    const form = useFormCore({
+      schema: z.object({
+        name: z.string(),
+      }),
+      sourceValues: {
+        name: 'John',
+      },
+      hooks: {
+        beforeFieldChange: beforeFieldChangeSpy,
+        afterFieldChange: afterFieldChangeSpy,
+      },
+      async submit() {},
+    })
 
-  //   const field = form.fields.name.$use()
-  //   field.handleChange('Jane')
+    const field = form.fields.name.$use()
+    field.handleChange('Jane')
 
-  //   expect(beforeFieldChangeSpy).toHaveBeenCalledWith(field, 'Jane')
-  //   expect(afterFieldChangeSpy).toHaveBeenCalledWith(field, 'Jane')
-  //   expect(beforeFieldChangeSpy).toHaveBeenCalledBefore(afterFieldChangeSpy)
-  // })
+    await sleep(100)
+
+    expect(beforeFieldChangeSpy).toHaveBeenCalledWith(field, 'Jane')
+    expect(afterFieldChangeSpy).toHaveBeenCalledWith(field, 'Jane')
+    expect(beforeFieldChangeSpy).toHaveBeenCalledBefore(afterFieldChangeSpy)
+  })
 
   // test('beforeFieldReset, afterFieldReset', () => {
   //   const beforeFieldResetSpy = vi.fn()
