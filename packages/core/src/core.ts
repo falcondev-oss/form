@@ -95,8 +95,8 @@ export interface FormHooks<
   afterValidate: (result: StandardSchemaV1.Result<Schema>) => Promise<void> | void
   // beforeFieldReset: () => Promise<void> | void
   // afterFieldReset: () => Promise<void> | void
-  // beforeFieldChange: (field: FormFieldInternal<unknown>, newValue: unknown | null) => void
-  // afterFieldChange: (field: FormFieldInternal<unknown>, updatedValue: unknown | null) => void
+  beforeFieldChange: (field: FormFieldInternal<unknown>, newValue: unknown | null) => void
+  afterFieldChange: (field: FormFieldInternal<unknown>, updatedValue: unknown | null) => void
 }
 
 const updatePathSymbol = Symbol('updatePath')
@@ -394,11 +394,11 @@ export function useFormCore<
                 // console.debug(
                 //   `======== handleChange (${pathRef.value}): '${JSON.stringify(_value)}'`,
                 // )
-                // void hooks.callHook(
-                //   'beforeFieldChange',
-                //   field as FormFieldInternal<unknown>,
-                //   _value,
-                // )
+                void hooks.callHook(
+                  'beforeFieldChange',
+                  field as FormFieldInternal<unknown>,
+                  _value,
+                )
 
                 fieldValue.value = _value
 
@@ -409,7 +409,7 @@ export function useFormCore<
                 updateCount.value++
                 formUpdateCount.value++
 
-                // void hooks.callHook('afterFieldChange', field as FormFieldInternal<unknown>, value)
+                void hooks.callHook('afterFieldChange', field as FormFieldInternal<unknown>, value)
 
                 if (fieldErrors.value && fieldErrors.value.length > 0) void validateField()
               },
