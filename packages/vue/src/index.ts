@@ -14,7 +14,7 @@ type MaybeNonWritableRef<T> = T | Ref<T, T> | ShallowRef<T, T>
 
 export type FormHandle = {
   isChanged: MaybeNonWritableRef<boolean>
-  isSubmitting: MaybeNonWritableRef<boolean>
+  isLoading: MaybeNonWritableRef<boolean>
   errors: MaybeNonWritableRef<unknown> | undefined
   submit: () => Promise<unknown>
   reset: () => void
@@ -27,7 +27,7 @@ export function useFormHandles(forms: MaybeRefOrGetter<FormHandle[]>) {
 
     return {
       isChanged: forms_.some((f) => toValue(f.isChanged)),
-      isSubmitting: forms_.some((f) => toValue(f.isSubmitting)),
+      isLoading: forms_.some((f) => toValue(f.isLoading)),
       errors: forms_.find((f) => toValue(f.errors))?.errors,
       submit: async () => Promise.all(forms_.map(async (f) => f.submit())),
       reset: () => {

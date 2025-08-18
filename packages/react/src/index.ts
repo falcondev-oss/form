@@ -88,8 +88,8 @@ export function useForm<const Schema extends FormSchema>(
   useEffect(() => {
     // console.debug('useForm().useEffect', form.data)
 
-    watch([form.errors, form.isSubmitting, form.isChanged, form.isDirty], () => {
-      // console.debug('useForm().watch -> rerender', { isSubmitting: form.isSubmitting.value })
+    watch([form.errors, form.isLoading, form.isChanged, form.isDirty], () => {
+      // console.debug('useForm().watch -> rerender', { isLoading: form.isLoading.value })
       setTick(Date.now())
     })
   }, [])
