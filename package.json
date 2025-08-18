@@ -29,11 +29,10 @@
     "lint:fix": "eslint --fix --cache . && prettier --write --cache ."
   },
   "devDependencies": {
-    "@louishaftmann/eslint-config": "^4.3.3",
-    "@louishaftmann/prettier-config": "^4.3.3",
-    "eslint": "^9.32.0",
+    "@falcondev-oss/configs": "^5.0.2",
+    "eslint": "^9.33.0",
     "prettier": "^3.6.2",
-    "tsdown": "^0.13.3",
+    "tsdown": "^0.14.1",
     "typescript": "^5.9.2"
   },
   "changelogithub": {

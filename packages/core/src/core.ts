@@ -1,5 +1,5 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
-import type { ComputedRef, DeepReadonly, Reactive, Ref } from '@vue/reactivity'
+import type { ComputedRef, Reactive, Ref } from '@vue/reactivity'
 import type { NestedHooks } from 'hookable'
 import type {
   IfUnknown,
@@ -40,7 +40,7 @@ type ObjectHasFunctionsOrSymbols<T> =
     ? false
     : IsUnknown<T[keyof T]> extends true
       ? false
-      : [(...args: any[]) => any] extends [NonNullable<T>[keyof NonNullable<T>]]
+      : [NonNullable<T>[keyof NonNullable<T>]] extends [(...args: any[]) => any]
         ? true
         : true extends { [K in keyof T]: IsSymbolLiteral<K> extends true ? true : never }[keyof T]
           ? true
@@ -68,14 +68,14 @@ type FormData<Schema extends FormSchema> = NonNullable<
 
 export const extendsSymbol = Symbol('extends')
 
-type MaybeGetter<T extends object> = T | (() => T)
+type MaybeGetter<T extends object | undefined> = T | (() => T)
 
 export interface FormOptions<
   Schema extends FormSchema,
   Output extends StandardSchemaV1.InferOutput<Schema> = StandardSchemaV1.InferOutput<Schema>,
 > {
   schema: Schema
-  sourceValues: MaybeGetter<Writable<FormData<Schema>>>
+  sourceValues: MaybeGetter<Writable<FormData<Schema>> | undefined>
   submit: (ctx: { values: Output }) => Promise<void | { success: boolean }>
   hooks?: NestedHooks<FormHooks<Schema>>
   [extendsSymbol]?: {
@@ -140,22 +140,30 @@ export function useFormCore<
   const hooks = createHooks<FormHooks<Schema>>()
   if (formOpts.hooks) hooks.addHooks(formOpts.hooks)
 
-  const sourceValues = toRef(formOpts.sourceValues) as unknown as Ref<Data>
+  const sourceValues = toRef(formOpts.sourceValues) as unknown as Ref<Data | undefined>
   const formUpdateCount = ref(0)
-  const isSubmitting = ref(false)
-  const disabled = computed(() => isSubmitting.value)
+  const isLoading = ref(false)
+  const disabled = computed(() => isLoading.value)
 
   const formError = ref<StandardSchemaV1.FailureResult>()
-  const formDataRef = ref(clone(sourceValues.value)) as Ref<Data>
-  const formData = toReactive(formDataRef) as Data
+  const formDataRef = ref(clone(sourceValues.value ?? {})) as Ref<Partial<Data>>
+  const formData = toReactive(formDataRef) as Partial<Data>
 
   function reset() {
     // console.debug('useCoolForm: reset()')
 
-    formDataRef.value = clone(sourceValues.value)
+    formDataRef.value = clone(sourceValues.value ?? {})
     formUpdateCount.value = 0
     formError.value = undefined
   }
+
+  watch(
+    sourceValues,
+    () => {
+      isLoading.value = sourceValues.value === undefined
+    },
+    { immediate: true },
+  )
 
   watch(sourceValues, () => {
     // console.debug('sourceValues changed')
@@ -169,6 +177,7 @@ export function useFormCore<
       console.warn('useCoolForm:', 'Skipped sourceValues update after form was edited.')
       return
     }
+    if (isLoading.value) return
     reset()
   })
 
@@ -292,7 +301,7 @@ export function useFormCore<
         }
 
         if (prop === '$use') {
-          return <T extends DeepReadonly<any>>(
+          return <T>(
             $opts: Parameters<FormFieldAccessor<T>['$use']>[0] &
               Parameters<FormFieldAccessorDiscriminator<T, string>['$use']>[0],
           ) => {
@@ -307,7 +316,7 @@ export function useFormCore<
 
             const isEditing = ref(false)
             function getValue() {
-              const _value = getProperty(formData, pathRef.value, undefined) as T
+              const _value = getProperty(formData, pathRef.value, null) as T
               return $opts?.translate?.get(_value) ?? _value
             }
             const fieldValue = ref(getValue())
@@ -361,8 +370,8 @@ export function useFormCore<
                 ? fieldError.value.issues.map((i) => i.message)
                 : undefined,
             )
-            watch(isSubmitting, () => {
-              if (isSubmitting.value) fieldErrors.reset()
+            watch(isLoading, () => {
+              if (isLoading.value) fieldErrors.reset()
             })
 
             async function validateField() {
@@ -389,6 +398,8 @@ export function useFormCore<
               disabled,
               errors: fieldErrors,
               handleChange: (_value: T) => {
+                if (disabled.value) return
+
                 isEditing.value = true
 
                 // console.debug(
@@ -414,12 +425,15 @@ export function useFormCore<
                 if (fieldErrors.value && fieldErrors.value.length > 0) void validateField()
               },
               handleBlur: () => {
+                if (disabled.value) return
+
                 // console.debug(`======== handleBlur (${pathRef.value})`)
                 if (updateCount.value === 0) return
 
                 void validateField()
               },
               reset: () => {
+                if (disabled.value) return
                 // await hooks.callHook('beforeFieldReset')
 
                 updateCount.value = 0
@@ -482,19 +496,19 @@ export function useFormCore<
     hooks,
     fields: createFormFieldProxy(),
     isDirty: computed(() => formUpdateCount.value !== 0),
-    isChanged: computed(() => !hasSubObject<object, object>(sourceValues.value, formData)),
-    isSubmitting: readonly(isSubmitting),
+    isChanged: computed(() => !hasSubObject<object, object>(sourceValues.value ?? {}, formData)),
+    isLoading: readonly(isLoading),
     data: observedFormData,
     errors: computed(() => formError.value?.issues),
     reset,
     submit: async () => {
-      isSubmitting.value = true
+      isLoading.value = true
 
       try {
         const validationResult = await validateForm()
 
         if (!validationResult) {
-          isSubmitting.value = false
+          isLoading.value = false
           return { success: false }
         }
 
@@ -510,7 +524,7 @@ export function useFormCore<
         console.error(err)
         return { success: false }
       } finally {
-        isSubmitting.value = false
+        isLoading.value = false
       }
     },
   }
@@ -563,6 +577,11 @@ type GetDiscriminator<T> =
     : never
 
 export type FormFields<T> = BuildFormFieldAccessors<NullableDeep<T>>
+
+// type AAAAAAAAAA = BuildFormFieldAccessors<{
+//   person: string
+// }>
+// type dddddddd = AAAAAAAAAA['']
 
 type BuildFormFieldAccessors<T, StopDiscriminator = false> = [IsAny<T>] extends [true]
   ? FormFieldAccessor<any>

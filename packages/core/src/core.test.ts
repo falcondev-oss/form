@@ -1,4 +1,4 @@
-import { watch } from '@vue/reactivity'
+import { ref, watch } from '@vue/reactivity'
 import { describe, expect, test, vi } from 'vitest'
 import z from 'zod'
 import { useFormCore } from './core'
@@ -302,5 +302,38 @@ describe('hooks', () => {
     await form.submit()
 
     expect(hookOrder).toEqual(['beforeSubmit', 'submit', 'afterSubmit'])
+  })
+
+  test('sourceValues is undefined', async () => {
+    const isLoading = ref(true)
+
+    const form = useFormCore({
+      schema: z.object({
+        person: z.object({
+          name: z.string(),
+        }),
+      }),
+      sourceValues() {
+        if (isLoading.value) return
+
+        return {
+          person: { name: 'John Doe' },
+        }
+      },
+      async submit() {},
+    })
+
+    expect(form.isLoading.value).toBe(true)
+    expect(form.data.person).toBeUndefined()
+    expect(form.fields.person.name.$use().value).toBeNull()
+
+    form.fields.person.name.$use().handleChange('Jane Doe')
+    expect(form.fields.person.name.$use().value).toBeNull()
+
+    isLoading.value = false
+    expect(form.isLoading.value).toBe(false)
+
+    expect(form.fields.person.name.$use().value).toBe('John Doe')
+    expect(form.data.person?.name).toBe('John Doe')
   })
 })
