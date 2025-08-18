@@ -40,7 +40,7 @@
   },
   "scripts": {
     "test": "vitest run",
-    "build": "tsdown src/",
+    "build": "tsdown src/core.ts src/reactive.ts",
     "type-check": "tsc --noEmit"
   },
   "peerDependencies": {
