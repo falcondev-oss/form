@@ -192,15 +192,20 @@ export function useFormCore<
       formUpdateCount.value++
 
       const cachedField = getProperty(fieldCache, path, undefined)
-      // @ts-expect-error $fetch is a key of the array
+      // @ts-expect-error $fetch is a property on the array object
       if (!cachedField || !isArray<(FieldCacheMeta | undefined)[]>(cachedField)) return
 
       // console.debug('observedFormData', { path, value, prevValue, applyData })
 
+      // keep fieldCache array structure & order in sync with data to prevent wrong item cache access
       match(applyData as { name: ArrayMutationMethod; args: unknown[] } | undefined)
-        .with({ name: P.union('pop', 'splice', 'shift', 'reverse') }, ({ name, args }) => {
+        .with({ name: P.union('pop', 'shift', 'reverse') }, ({ name, args }) => {
           // @ts-expect-error args can be spread
           cachedField[name]?.(...args)
+        })
+        .with({ name: 'splice' }, ({ args }) => {
+          const [start, deleteCount, ...items] = args as Parameters<[]['splice']>
+          cachedField.splice(start, deleteCount, ...items.map(() => undefined))
         })
         .with({ name: 'unshift' }, () => {
           cachedField.unshift(undefined)
