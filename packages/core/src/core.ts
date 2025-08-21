@@ -324,7 +324,7 @@ export function useFormCore<
               const _value = getProperty(formData, pathRef.value, null) as T
               return $opts?.translate?.get(_value) ?? _value
             }
-            const fieldValue = ref(getValue())
+            const fieldValue = ref<unknown | null>(getValue())
             watch(
               () => getValue(),
               () => {
@@ -338,8 +338,10 @@ export function useFormCore<
             const discriminator = $opts?.discriminator
             if (discriminator) {
               return reactive({
-                // eslint-disable-next-line ts/no-unsafe-return, ts/no-unsafe-member-access
-                [discriminator]: computed(() => fieldValue.value[discriminator]),
+                [discriminator]: computed(
+                  () =>
+                    (fieldValue.value as Record<string, unknown> | null)?.[discriminator] ?? null,
+                ),
                 $field: computed(() => createFormFieldProxy(pathRef.value)),
               })
             }
