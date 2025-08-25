@@ -174,7 +174,7 @@ export function useFormCore<
         field.isTouched.timestamp > sourceValues.timestamp: field was changed normally (option: undo)
         field.isTouched.timestamp < sourceValues.timestamp: field is outdated (option: update)
       */
-      console.warn('useCoolForm:', 'Skipped sourceValues update after form was edited.')
+      console.warn('useForm:', 'Skipped sourceValues update after form was edited')
       return
     }
     if (isLoading.value) return
@@ -405,7 +405,14 @@ export function useFormCore<
               disabled,
               errors: fieldErrors,
               handleChange: (_value: T) => {
-                if (disabled.value) return
+                if (disabled.value) {
+                  console.warn(
+                    'useForm:',
+                    'handleChange() was blocked on a disabled field',
+                    `(${pathRef.value})`,
+                  )
+                  return
+                }
 
                 isEditing.value = true
 
@@ -432,7 +439,14 @@ export function useFormCore<
                 if (fieldErrors.value && fieldErrors.value.length > 0) void validateField()
               },
               handleBlur: () => {
-                if (disabled.value) return
+                if (disabled.value) {
+                  console.warn(
+                    'useForm:',
+                    'handleBlur() was blocked on a disabled field',
+                    `(${pathRef.value})`,
+                  )
+                  return
+                }
 
                 // console.debug(`======== handleBlur (${pathRef.value})`)
                 if (updateCount.value === 0) return
@@ -440,7 +454,14 @@ export function useFormCore<
                 void validateField()
               },
               reset: () => {
-                if (disabled.value) return
+                if (disabled.value) {
+                  console.warn(
+                    'useForm:',
+                    'reset() was blocked on a disabled field',
+                    `(${pathRef.value})`,
+                  )
+                  return
+                }
                 // await hooks.callHook('beforeFieldReset')
 
                 updateCount.value = 0
@@ -534,7 +555,7 @@ export function useFormCore<
         isLoading.value = false
       }
     },
-  }
+  } as const
 }
 
 export type FormFieldTranslator<T, O> = {
@@ -545,6 +566,8 @@ type FormFieldAccessor<T> = {
   $use: <O>(opts?: { translate?: FormFieldTranslator<T, O> }) => FormField<IfUnknown<O, T, O>>
 }
 
+// eslint-disable-next-line unused-imports/no-unused-vars
+declare const NullSymbol: unique symbol
 type FormFieldAccessorDiscriminator<T, Discriminator extends string> = {
   $use: <
     Opts extends {
@@ -554,12 +577,15 @@ type FormFieldAccessorDiscriminator<T, Discriminator extends string> = {
     opts?: Opts,
   ) => Opts extends { discriminator: string }
     ? {
-        [D in T[Extract<keyof T, Discriminator>] & string]: Simplify<
-          Record<Discriminator, D> & {
-            $field: BuildFormFieldAccessors<Extract<T, Record<Discriminator, D>>, true>
+        [D in (T[Extract<keyof T, Discriminator>] & string) | typeof NullSymbol]: Simplify<
+          Record<Discriminator, D extends typeof NullSymbol ? null : D> & {
+            $field: BuildFormFieldAccessors<
+              D extends typeof NullSymbol ? null : Extract<T, Record<Discriminator, D>>,
+              true
+            >
           }
         >
-      }[T[Extract<keyof T, Discriminator>] & string]
+      }[(T[Extract<keyof T, Discriminator>] & string) | typeof NullSymbol]
     : FormField<T>
 }
 

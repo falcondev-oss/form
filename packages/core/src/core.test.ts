@@ -1,5 +1,5 @@
 import { ref, watch } from '@vue/reactivity'
-import { describe, expect, test, vi } from 'vitest'
+import { describe, expect, expectTypeOf, test, vi } from 'vitest'
 import z from 'zod'
 import { useFormCore } from './core'
 import { sleep } from './helpers'
@@ -131,6 +131,65 @@ describe('field', () => {
 
     expect(field.value).toBe(now)
     expect(form.data.date).toBe(now.toISOString())
+  })
+
+  test('discriminator', async () => {
+    const loadedData = {
+      union: {
+        type: 'A' as const,
+        value: 'Hello',
+      },
+    }
+    const data = ref<typeof loadedData>()
+
+    const form = useFormCore({
+      schema: z.object({
+        union: z.discriminatedUnion('type', [
+          z.object({
+            type: z.literal('A'),
+            value: z.string(),
+          }),
+          z.object({
+            type: z.literal('B'),
+            value: z.number(),
+          }),
+        ]),
+      }),
+      sourceValues() {
+        return data.value
+      },
+      async submit() {},
+    })
+
+    const unionField = form.fields.union.$use({ discriminator: 'type' })
+
+    expect(unionField.type).toBeNull()
+    expect(unionField.$field.$use().value).toEqual(null)
+    if (unionField.type === null) {
+      expectTypeOf(unionField.$field.$use().value).toEqualTypeOf<null>()
+    }
+    data.value = loadedData
+
+    expect(unionField.$field.$use().value).toEqual({ type: 'A', value: 'Hello' })
+    if (unionField.type === 'A') {
+      expectTypeOf(unionField.$field.$use().value).toEqualTypeOf<
+        Readonly<{
+          type: 'A'
+          value: string | null
+        }>
+      >()
+    }
+
+    form.data.union = { type: 'B', value: 42 }
+    expect(unionField.$field.$use().value).toEqual({ type: 'B', value: 42 })
+    if (unionField.type === 'B') {
+      expectTypeOf(unionField.$field.$use().value).toEqualTypeOf<
+        Readonly<{
+          type: 'B'
+          value: number | null
+        }>
+      >()
+    }
   })
 })
 
