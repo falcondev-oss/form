@@ -98,6 +98,7 @@ export type FormFieldInternal<T> = {
   $?: () => BuildFormFieldAccessors<any>
   [contextSymbol]: (ctx: { path: string }) => void
 }
+export type FormFieldContext<T> = Parameters<FormFieldInternal<T>[typeof contextSymbol]>[0]
 
 // eslint-disable-next-line unused-imports/no-unused-vars
 export interface FormFieldExtend<T> {}

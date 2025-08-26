@@ -128,10 +128,17 @@ describe('field', () => {
     expect(field.value).toStrictEqual('2025-01-01')
     expect(fieldT.value).toStrictEqual(new Date('2025-01-01'))
 
-    const now = new Date()
+    let now = new Date()
     fieldT.handleChange(now)
 
-    expect(fieldT.value).toBe(now)
+    expect(fieldT.value).toEqual(now)
+    expect(field.value).toBe(now.toISOString())
+    expect(form.data.date).toBe(now.toISOString())
+
+    now = new Date(+now + 1)
+    field.handleChange(now.toISOString())
+
+    expect(fieldT.value).toEqual(now)
     expect(field.value).toBe(now.toISOString())
     expect(form.data.date).toBe(now.toISOString())
   })
@@ -193,6 +200,39 @@ describe('field', () => {
         }>
       >()
     }
+  })
+
+  test('sourceValues is undefined', async () => {
+    const isLoading = ref(true)
+
+    const form = useFormCore({
+      schema: z.object({
+        person: z.object({
+          name: z.string(),
+        }),
+      }),
+      sourceValues() {
+        if (isLoading.value) return
+
+        return {
+          person: { name: 'John Doe' },
+        }
+      },
+      async submit() {},
+    })
+
+    expect(form.isLoading.value).toBe(true)
+    expect(form.data.person).toBeUndefined()
+    expect(form.fields.person.name.$use().value).toBeNull()
+
+    form.fields.person.name.$use().handleChange('Jane Doe')
+    expect(form.fields.person.name.$use().value).toBeNull()
+
+    isLoading.value = false
+    expect(form.isLoading.value).toBe(false)
+
+    expect(form.fields.person.name.$use().value).toBe('John Doe')
+    expect(form.data.person?.name).toBe('John Doe')
   })
 })
 
@@ -364,38 +404,5 @@ describe('hooks', () => {
     await form.submit()
 
     expect(hookOrder).toEqual(['beforeSubmit', 'submit', 'afterSubmit'])
-  })
-
-  test('sourceValues is undefined', async () => {
-    const isLoading = ref(true)
-
-    const form = useFormCore({
-      schema: z.object({
-        person: z.object({
-          name: z.string(),
-        }),
-      }),
-      sourceValues() {
-        if (isLoading.value) return
-
-        return {
-          person: { name: 'John Doe' },
-        }
-      },
-      async submit() {},
-    })
-
-    expect(form.isLoading.value).toBe(true)
-    expect(form.data.person).toBeUndefined()
-    expect(form.fields.person.name.$use().value).toBeNull()
-
-    form.fields.person.name.$use().handleChange('Jane Doe')
-    expect(form.fields.person.name.$use().value).toBeNull()
-
-    isLoading.value = false
-    expect(form.isLoading.value).toBe(false)
-
-    expect(form.fields.person.name.$use().value).toBe('John Doe')
-    expect(form.data.person?.name).toBe('John Doe')
   })
 })
