@@ -99,7 +99,7 @@ export interface FormHooks<
   afterFieldChange: (field: FormFieldInternal<unknown>, updatedValue: unknown | null) => void
 }
 
-const updatePathSymbol = Symbol('updatePath')
+const contextSymbol = Symbol('contextSymbol')
 
 export type NonPrimitiveReadonly<T> = T extends Primitive ? T : Readonly<T>
 export type FormFieldInternal<T> = {
@@ -115,7 +115,7 @@ export type FormFieldInternal<T> = {
   key: string
   validator: ZodType | undefined
   $?: () => BuildFormFieldAccessors<any>
-  [updatePathSymbol]: (newPath: string) => void
+  [contextSymbol]: (ctx: { path: string }) => void
 }
 
 // eslint-disable-next-line unused-imports/no-unused-vars
@@ -306,22 +306,21 @@ export function useFormCore<
         }
 
         if (prop === '$use') {
-          return <T>(
-            $opts: Parameters<FormFieldAccessor<T>['$use']>[0] &
-              Parameters<FormFieldAccessorDiscriminator<T, string>['$use']>[0],
-          ) => {
+          return <T>($opts: FormFieldAccessorOptions<T>) => {
             const cachedField = getProperty(fieldCache, `${path}.$field`, undefined)
-            if (cachedField) {
-              cachedField[updatePathSymbol](path)
+            if (cachedField && !$opts?.discriminator) {
+              cachedField[contextSymbol]({ path })
               return cachedField
             }
 
-            const pathRef = ref(path)
+            const context = ref<Parameters<FormFieldInternal<T>[typeof contextSymbol]>[0]>({
+              path,
+            })
             // console.debug('$use', path)
 
             const isEditing = ref(false)
             function getValue() {
-              const _value = getProperty(formData, pathRef.value, null) as T
+              const _value = getProperty(formData, context.value.path, null) as T
               return $opts?.translate?.get(_value) ?? _value
             }
             const fieldValue = ref<unknown | null>(getValue())
@@ -342,7 +341,7 @@ export function useFormCore<
                   () =>
                     (fieldValue.value as Record<string, unknown> | null)?.[discriminator] ?? null,
                 ),
-                $field: computed(() => createFormFieldProxy(pathRef.value)),
+                $field: computed(() => createFormFieldProxy(context.value.path)),
               })
             }
 
@@ -367,7 +366,7 @@ export function useFormCore<
                     issues: formError.value.issues.filter((issue) => {
                       if (!issue.path) return false
                       const issuePath = issuePathToDotNotation(issue.path)
-                      return issuePath === pathRef.value
+                      return issuePath === context.value.path
                     }),
                   } satisfies StandardSchemaV1.FailureResult)
                 : undefined
@@ -395,7 +394,7 @@ export function useFormCore<
                 issues: formResult.issues.filter((issue) => {
                   if (!issue.path) return false
                   const issuePath = issuePathToDotNotation(issue.path)
-                  return issuePath === pathRef.value
+                  return issuePath === context.value.path
                 }),
               } satisfies StandardSchemaV1.FailureResult
             }
@@ -409,7 +408,7 @@ export function useFormCore<
                   console.warn(
                     'useForm:',
                     'handleChange() was blocked on a disabled field',
-                    `(${pathRef.value})`,
+                    `(${context.value.path})`,
                   )
                   return
                 }
@@ -428,7 +427,7 @@ export function useFormCore<
                 fieldValue.value = _value
 
                 const value = $opts?.translate?.set(_value) ?? _value
-                setProperty(formData, pathRef.value, value)
+                setProperty(formData, context.value.path, value)
                 isEditing.value = false
 
                 updateCount.value++
@@ -443,7 +442,7 @@ export function useFormCore<
                   console.warn(
                     'useForm:',
                     'handleBlur() was blocked on a disabled field',
-                    `(${pathRef.value})`,
+                    `(${context.value.path})`,
                   )
                   return
                 }
@@ -458,14 +457,14 @@ export function useFormCore<
                   console.warn(
                     'useForm:',
                     'reset() was blocked on a disabled field',
-                    `(${pathRef.value})`,
+                    `(${context.value.path})`,
                   )
                   return
                 }
                 // await hooks.callHook('beforeFieldReset')
 
                 updateCount.value = 0
-                setProperty(formData, pathRef.value, initialValue.value)
+                setProperty(formData, context.value.path, initialValue.value)
                 fieldError.value = undefined
 
                 // await hooks.callHook('afterFieldReset')
@@ -478,7 +477,7 @@ export function useFormCore<
               path,
               key: `${path}@${now}`,
               validator: fieldValidator ? markRaw(fieldValidator) : undefined,
-              [updatePathSymbol]: updatePath,
+              [contextSymbol]: setContext,
             }) satisfies FormFieldInternal<T>
 
             Object.defineProperty(field, '$', {
@@ -487,9 +486,9 @@ export function useFormCore<
               },
             })
 
-            function updatePath(newPath: string) {
-              pathRef.value = newPath
-              field.path = newPath
+            function setContext(ctx: typeof context.value) {
+              context.value = ctx
+              field.path = ctx.path
             }
 
             Object.assign(field, formOpts[extendsSymbol]?.$use?.(field))
@@ -588,6 +587,9 @@ type FormFieldAccessorDiscriminator<T, Discriminator extends string> = {
       }[(T[Extract<keyof T, Discriminator>] & string) | typeof NullSymbol]
     : FormField<T>
 }
+
+type FormFieldAccessorOptions<T> = Parameters<FormFieldAccessor<T>['$use']>[0] &
+  Parameters<FormFieldAccessorDiscriminator<T, string>['$use']>[0]
 
 export const ErrorMessageSymbol: unique symbol = Symbol('ErrorMessageSymbol')
 // type Error<M> = { [ErrorMessageSymbol]: M }
