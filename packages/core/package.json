@@ -16,14 +16,14 @@
     "typescript"
   ],
   "exports": {
-    ".": "./src/core.ts",
+    ".": "./src/index.ts",
     "./reactive": "./src/reactive.ts"
   },
   "publishConfig": {
     "exports": {
       ".": {
-        "import": "./dist/core.js",
-        "require": "./dist/core.cjs"
+        "import": "./dist/index.js",
+        "require": "./dist/index.cjs"
       },
       "./reactive": {
         "import": "./dist/reactive.js",
@@ -40,11 +40,11 @@
   },
   "scripts": {
     "test": "vitest run",
-    "build": "tsdown src/core.ts src/reactive.ts",
+    "build": "tsdown src/index.ts src/reactive.ts",
     "type-check": "tsc --noEmit"
   },
   "peerDependencies": {
-    "zod": "^3.25.0 || ^4.0.0"
+    "zod": "^4.0.0"
   },
   "dependencies": {
     "@standard-schema/spec": "^1.0.0",

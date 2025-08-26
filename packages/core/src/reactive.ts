@@ -1,17 +1,23 @@
 /* eslint-disable ts/no-unsafe-assignment */
 /* eslint-disable ts/no-unsafe-member-access */
-import type { MaybeRef, MaybeRefOrGetter, Ref, UnwrapNestedRefs } from '@vue/reactivity'
+import type {
+  ComputedGetter,
+  MaybeRef,
+  MaybeRefOrGetter,
+  Ref,
+  UnwrapNestedRefs,
+} from '@vue/reactivity'
 import { computed, effect, isRef, reactive, ref, toRef, unref } from '@vue/reactivity'
 
-// https://github.com/vueuse/vueuse/blob/798077d678a2a8cd50cc3c3b85a722befb6087d4/packages/shared/reactiveComputed/index.ts
+// https://github.com/vueuse/vueuse/blob/ce09e0d03e0cac5884ad57bb87215428ac34917b/packages/shared/reactiveComputed/index.ts
 /**
  * Computed reactive object.
  */
-export function reactiveComputed<T extends object>(fn: () => T): UnwrapNestedRefs<T> {
-  return toReactive(computed(fn))
+export function reactiveComputed<T extends object>(fn: ComputedGetter<T>): UnwrapNestedRefs<T> {
+  return toReactive<T>(computed<T>(fn))
 }
 
-// https://github.com/vueuse/vueuse/blob/798077d678a2a8cd50cc3c3b85a722befb6087d4/packages/shared/toReactive/index.ts
+// https://github.com/vueuse/vueuse/blob/ce09e0d03e0cac5884ad57bb87215428ac34917b/packages/shared/toReactive/index.ts
 /**
  * Converts ref to reactive.
  *

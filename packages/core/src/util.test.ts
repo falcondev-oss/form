@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { issuePathToDotNotation } from './helpers'
+import { issuePathToDotNotation } from './util'
 
 describe(issuePathToDotNotation.name, () => {
   test('single segment', () => {

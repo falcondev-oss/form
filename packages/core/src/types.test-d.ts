@@ -1,4 +1,4 @@
-import type { NullableDeep } from './core'
+import type { NullableDeep } from './types'
 import { assertType, test } from 'vitest'
 
 const brand = Symbol('Brand')
