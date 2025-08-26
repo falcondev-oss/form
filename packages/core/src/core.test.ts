@@ -117,19 +117,22 @@ describe('field', () => {
       async submit() {},
     })
 
-    const field = form.fields.date.$use({
+    const field = form.fields.date.$use()
+    const fieldT = form.fields.date.$use({
       translate: {
         get: (v) => (v ? new Date(v) : null),
         set: (v) => v?.toISOString() ?? null,
       },
     })
 
-    expect(field.value).toStrictEqual(new Date('2025-01-01'))
+    expect(field.value).toStrictEqual('2025-01-01')
+    expect(fieldT.value).toStrictEqual(new Date('2025-01-01'))
 
     const now = new Date()
-    field.handleChange(now)
+    fieldT.handleChange(now)
 
-    expect(field.value).toBe(now)
+    expect(fieldT.value).toBe(now)
+    expect(field.value).toBe(now.toISOString())
     expect(form.data.date).toBe(now.toISOString())
   })
 
