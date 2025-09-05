@@ -115,7 +115,9 @@ export type FormFieldTranslator<T, O> = {
   set: (v: O) => T
 }
 type FormFieldAccessor<T> = {
-  $use: <O>(opts?: { translate?: FormFieldTranslator<T, O> }) => FormField<IfUnknown<O, T, O>>
+  $use: <O>(opts?: {
+    translate?: FormFieldTranslator<T, O>
+  }) => NoInfer<FormField<IfUnknown<O, T, O>>>
 }
 
 // eslint-disable-next-line unused-imports/no-unused-vars
