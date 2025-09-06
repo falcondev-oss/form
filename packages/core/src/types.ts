@@ -1,5 +1,5 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
-import type { Reactive } from '@vue/reactivity'
+import type { Reactive, UnwrapNestedRefs } from '@vue/reactivity'
 import type { NestedHooks } from 'hookable'
 import type {
   IfUnknown,
@@ -47,7 +47,7 @@ export type FormData<Schema extends FormSchema> = NonNullable<
   NullableDeep<StandardSchemaV1.InferOutput<Schema>>
 >
 
-export const extendsSymbol = Symbol('extends')
+export const extend = Symbol('extend')
 
 type MaybeGetter<T extends object | undefined> = T | (() => T)
 
@@ -59,7 +59,8 @@ export interface FormOptions<
   sourceValues: MaybeGetter<Writable<FormData<Schema>> | undefined>
   submit: (ctx: { values: Output }) => Promise<void | { success: boolean }>
   hooks?: NestedHooks<FormHooks<Schema>>
-  [extendsSymbol]?: {
+  [extend]?: {
+    setup?: <T>(field: FormFieldInternal<T>) => FormFieldExtend<T>
     $use?: <T>(field: FormFieldInternal<T>) => FormFieldExtend<T>
   }
 }
@@ -80,7 +81,7 @@ export interface FormHooks<
   afterFieldChange: (field: FormFieldInternal<unknown>, updatedValue: unknown | null) => void
 }
 
-export const contextSymbol = Symbol('context')
+export const setContext = Symbol('setContext')
 
 export type NonPrimitiveReadonly<T> = T extends Primitive ? T : Readonly<T>
 export type FormFieldInternal<T> = {
@@ -96,17 +97,17 @@ export type FormFieldInternal<T> = {
   key: string
   validator: ZodType | undefined
   $?: () => BuildFormFieldAccessors<any>
-  [contextSymbol]: (ctx: { path: string }) => void
+  [setContext]: (ctx: { path: string }) => void
 }
-export type FormFieldContext<T> = Parameters<FormFieldInternal<T>[typeof contextSymbol]>[0]
+export type FormFieldContext<T> = Parameters<FormFieldInternal<T>[typeof setContext]>[0]
 
 // eslint-disable-next-line unused-imports/no-unused-vars
 export interface FormFieldExtend<T> {}
 
 export interface FormField<T>
   extends Omit<FormFieldInternal<T>, '$'>,
-    Reactive<FormFieldExtend<T>> {
-  $: <TT extends T>() => BuildFormFieldAccessors<TT>
+    UnwrapNestedRefs<FormFieldExtend<T>> {
+  $: () => BuildFormFieldAccessors<T>
 }
 export type FormFieldProps<T> = { field: FormField<NullableDeep<T>> }
 

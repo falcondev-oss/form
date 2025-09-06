@@ -12,11 +12,11 @@ import type {
   FormSchema,
   NonPrimitiveReadonly,
 } from './types'
-import { computed, markRaw, reactive, readonly, ref, watch } from '@vue/reactivity'
+import { computed, markRaw, reactive, readonly, ref, toRefs, watch } from '@vue/reactivity'
 import { getProperty, setProperty } from 'dot-prop'
 import { isDeepEqual } from 'remeda'
 import { refEffect } from './reactive'
-import { contextSymbol } from './types'
+import { extend, setContext } from './types'
 import { issuePathToDotNotation } from './util'
 import { getValidatorByPath } from './validator'
 
@@ -202,26 +202,28 @@ export class FormField<T, Schema extends FormSchema> {
       path,
       key: `${path}@${this.#now}`,
       validator: validator ? markRaw(validator) : undefined,
-      [contextSymbol]: this.#setContext.bind(this),
+      [setContext]: this.#setContext.bind(this),
     })
     this.api = api satisfies FormFieldInternal<T>
   }
 
   translatedApi<TT extends T, O>(translator: FormFieldTranslator<TT, O>) {
-    return new Proxy(this.api, {
-      get(target: FormFieldInternal<T>, p: string | symbol, receiver: any) {
-        if (p === 'value') {
-          return translator.get(target.value as TT)
-        }
-        if (p === 'handleChange') {
-          return (value: O) => {
-            const v = translator.set(value)
-            return target.handleChange(v)
-          }
-        }
-        // eslint-disable-next-line ts/no-unsafe-return
-        return Reflect.get(target, p, receiver)
+    const extendFieldFn = this.#form.opts[extend]?.$use
+
+    const translatedField = reactive({
+      ...toRefs(this.api),
+      value: computed(() => translator.get(this.api.value as TT) as NonPrimitiveReadonly<O>),
+      handleChange: (value: O) => {
+        const v = translator.set(value)
+        return this.api.handleChange(v)
       },
+      [setContext]: this.api[setContext],
     })
+
+    if (extendFieldFn) {
+      Object.assign(translatedField, extendFieldFn(translatedField))
+    }
+
+    return translatedField
   }
 }

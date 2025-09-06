@@ -1,7 +1,7 @@
 export { useFormCore } from './core'
 
 export {
-  extendsSymbol,
+  extend,
   type FormField,
   type FormFieldExtend,
   type FormFieldInternal,

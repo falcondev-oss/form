@@ -1,7 +1,12 @@
-import type { FormFieldProps, FormOptions, FormSchema } from '@falcondev-oss/form-core'
+import type {
+  FormFieldExtend,
+  FormFieldProps,
+  FormOptions,
+  FormSchema,
+} from '@falcondev-oss/form-core'
 import type { ComputedRef } from '@vue/reactivity'
 import type { FunctionComponent, NamedExoticComponent } from 'react'
-import { extendsSymbol, useFormCore } from '@falcondev-oss/form-core'
+import { extend, useFormCore } from '@falcondev-oss/form-core'
 import { refEffect } from '@falcondev-oss/form-core/reactive'
 import { computed, ref, watch } from '@vue/reactivity'
 import { memo, useEffect, useMemo, useState } from 'react'
@@ -35,16 +40,20 @@ export function useForm<const Schema extends FormSchema>(
     //   console.debug('useForm().watch -> rerender', { sourceValues: sourceValuesRef.value })
     // })
 
+    const tickRef = ref(0)
     const form = useFormCore({
       ...opts,
       submit: async (...args) => submitFnRef.value(...args),
 
       sourceValues: () => sourceValuesRef.value,
-      [extendsSymbol]: {
+      [extend]: {
+        setup: () => {
+          return {
+            [tick]: tickRef as unknown as number, // wait for https://github.com/vuejs/core/pull/13740
+          } satisfies Omit<FormFieldExtend<any>, 'model'> as FormFieldExtend<any>
+        },
         $use: (field) => {
           // console.debug('$use()', field.path)
-
-          const tickRef = ref(0)
 
           watch(
             () => [field.errors, field.value],
@@ -61,8 +70,7 @@ export function useForm<const Schema extends FormSchema>(
               value: field.value,
               onUpdate: field.handleChange,
             })),
-            [tick]: tickRef as unknown as number, // wait for https://github.com/vuejs/core/pull/13740
-          }
+          } satisfies Omit<FormFieldExtend<any>, typeof tick> as FormFieldExtend<any>
         },
       },
     })

@@ -17,7 +17,7 @@ import { hasSubObject, isArray } from 'remeda'
 import { match, P } from 'ts-pattern'
 import { FormField } from './field'
 import { toReactive } from './reactive'
-import { contextSymbol, extendsSymbol } from './types'
+import { extend, setContext } from './types'
 
 type ArrayMutationMethod =
   | 'push'
@@ -227,6 +227,15 @@ export function useFormCore<
                 isLoading,
               })
 
+              Object.defineProperty(field.api, '$', {
+                get() {
+                  return () => createFormFieldProxy(field.api.path)
+                },
+              })
+
+              Object.assign(field.api, formOpts[extend]?.setup?.(field.api))
+              Object.assign(field.api, formOpts[extend]?.$use?.(field.api))
+
               setProperty(fieldCache, `${path}.$field`, field)
             }
 
@@ -242,15 +251,7 @@ export function useFormCore<
             }
 
             if (cachedField) {
-              field.api[contextSymbol]({ path })
-            } else {
-              Object.defineProperty(field.api, '$', {
-                get() {
-                  return () => createFormFieldProxy(path)
-                },
-              })
-
-              Object.assign(field.api, formOpts[extendsSymbol]?.$use?.(field.api))
+              field.api[setContext]({ path })
             }
 
             if ($opts?.translate) return field.translatedApi($opts.translate)

@@ -1,7 +1,7 @@
 import type { FormHooks, FormOptions, FormSchema } from '@falcondev-oss/form-core'
 import type { Hookable } from 'hookable'
 import type { MaybeRefOrGetter, Ref, ShallowRef, WritableComputedRef } from 'vue'
-import { extendsSymbol, useFormCore } from '@falcondev-oss/form-core'
+import { extend, useFormCore } from '@falcondev-oss/form-core'
 import { computed, toValue } from 'vue'
 
 declare module '@falcondev-oss/form-core' {
@@ -42,7 +42,7 @@ export function useForm<const Schema extends FormSchema>(
 ): ReturnType<typeof useFormCore<Schema>> & { _v: 'new' } {
   const form = useFormCore({
     ...opts,
-    [extendsSymbol]: {
+    [extend]: {
       $use: (field) => {
         const model = computed({
           get: () => field.value,
