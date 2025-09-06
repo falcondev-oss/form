@@ -1,6 +1,6 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 
-export function issuePathToDotNotation(
+export function pathSegmentsToPathString(
   issuePath: readonly (PropertyKey | StandardSchemaV1.PathSegment)[],
 ) {
   let path = ''

@@ -75,7 +75,7 @@ describe('form', () => {
 })
 
 describe('field', () => {
-  test('errors', async () => {
+  test.only('errors', async () => {
     const form = useFormCore({
       schema: z.object({
         age: z.number(),

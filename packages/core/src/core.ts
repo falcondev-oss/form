@@ -18,6 +18,7 @@ import { match, P } from 'ts-pattern'
 import { FormField } from './field'
 import { toReactive } from './reactive'
 import { extend, setContext } from './types'
+import { pathSegmentsToPathString } from './util'
 
 type ArrayMutationMethod =
   | 'push'
@@ -89,57 +90,70 @@ export function useFormCore<
 
   const observedFormData = onChange(
     formData,
-    (path, value, prevValue, applyData) => {
+    (path, _value, _previousValue, _applyData) => {
       formUpdateCount.value++
 
-      const cachedField = getProperty(fieldCache, path, undefined)
-      // @ts-expect-error $fetch is a property on the array object
-      if (!cachedField || !isArray<(FieldCacheMeta | undefined)[]>(cachedField)) return
-
-      // console.debug('observedFormData', { path, value, prevValue, applyData })
-
-      // keep fieldCache array structure & order in sync with data to prevent wrong item cache access
-      match(applyData as { name: ArrayMutationMethod; args: unknown[] } | undefined)
-        .with({ name: P.union('pop', 'shift', 'reverse') }, ({ name, args }) => {
-          // @ts-expect-error args can be spread
-          cachedField[name]?.(...args)
-        })
-        .with({ name: 'splice' }, ({ args }) => {
-          const [start, deleteCount, ...items] = args as Parameters<[]['splice']>
-          cachedField.splice(start, deleteCount, ...items.map(() => undefined))
-        })
-        .with({ name: 'unshift' }, () => {
-          cachedField.unshift(undefined)
-        })
-        .with({ name: 'fill' }, ({ args: [_, ...args] }) => {
-          cachedField.fill(undefined, ...(args as (number | undefined)[]))
-        })
-        .with({ name: 'sort' }, ({ args }) => {
-          setProperty(formData, path, prevValue)
-          const formDataField = getProperty(formData, path, []) as unknown[]
-
-          const [compareFn] = args as Parameters<Array<unknown>['sort']>
-          if (!compareFn) {
-            cachedField.sort()
-            formDataField.sort()
-            return
-          }
-
-          cachedField.sort((a, b) => compareFn(a?.$field.api.value, b?.$field.api.value))
-          formDataField.sort(compareFn)
-        })
-        .with({ name: P.union('push') }, () => {}) // noop
-        .with(undefined, () => {
-          // property update
-          deleteProperty(fieldCache, path)
-          // console.debug('fieldCache invalidate', path)
-        })
-        .exhaustive()
+      const cachedField = getProperty(fieldCache, pathSegmentsToPathString(path), undefined)
+      void cachedField?.$field.validate()
     },
     {
       ignoreDetached: true,
       ignoreSymbols: true,
       ignoreKeys: ['__v_raw'],
+      pathAsArray: true,
+      onValidate(path_, _value, _previousValue, applyData) {
+        const path = path_ as unknown as string[] // pathAsArray: true
+
+        const cachedField = getProperty(fieldCache, pathSegmentsToPathString(path), undefined)
+        // @ts-expect-error $fetch is a property on the array object
+        if (!cachedField || !isArray<(FieldCacheMeta | undefined)[]>(cachedField)) return true
+
+        // console.debug('observedFormData', { path, value, prevValue, applyData })
+
+        // keep fieldCache array structure & order in sync with data to prevent wrong item cache access
+        match(applyData as { name: ArrayMutationMethod; args: unknown[] } | undefined)
+          .with({ name: P.union('pop', 'shift', 'reverse') }, ({ name, args }) => {
+            // @ts-expect-error args can be spread
+            cachedField[name]?.(...args)
+          })
+          .with({ name: 'splice' }, ({ args }) => {
+            const [start, deleteCount, ...items] = args as Parameters<[]['splice']>
+            cachedField.splice(start, deleteCount, ...items.map(() => undefined))
+          })
+          .with({ name: 'unshift' }, () => {
+            cachedField.unshift(undefined)
+          })
+          .with({ name: 'fill' }, ({ args: [_, ...args] }) => {
+            cachedField.fill(undefined, ...(args as (number | undefined)[]))
+          })
+          .with({ name: 'sort' }, ({ args }) => {
+            // setProperty(formData, path, prevValue) // onValidate runs before changes are applied
+            const formDataField = getProperty(
+              formData,
+              pathSegmentsToPathString(path),
+              [],
+            ) as unknown[]
+
+            const [compareFn] = args as Parameters<Array<unknown>['sort']>
+            if (!compareFn) {
+              cachedField.sort()
+              formDataField.sort()
+              return
+            }
+
+            cachedField.sort((a, b) => compareFn(a?.$field.api.value, b?.$field.api.value))
+            formDataField.sort(compareFn)
+          })
+          .with({ name: P.union('push') }, () => {}) // noop
+          .with(undefined, () => {
+            // property update
+            deleteProperty(fieldCache, pathSegmentsToPathString(path))
+            // console.debug('fieldCache invalidate', path)
+          })
+          .exhaustive()
+
+        return true
+      },
     },
   )
 

@@ -1,15 +1,15 @@
 import { describe, expect, test } from 'vitest'
-import { issuePathToDotNotation } from './util'
+import { pathSegmentsToPathString } from './util'
 
-describe(issuePathToDotNotation.name, () => {
+describe(pathSegmentsToPathString.name, () => {
   test('single segment', () => {
-    expect(issuePathToDotNotation(['name'])).toBe('name')
+    expect(pathSegmentsToPathString(['name'])).toBe('name')
   })
   test('nested object', () => {
-    expect(issuePathToDotNotation(['user', 'profile', 'name'])).toBe('user.profile.name')
+    expect(pathSegmentsToPathString(['user', 'profile', 'name'])).toBe('user.profile.name')
   })
   test('array', () => {
-    expect(issuePathToDotNotation(['user', 'profile', 'friends', 0, 'name'])).toBe(
+    expect(pathSegmentsToPathString(['user', 'profile', 'friends', 0, 'name'])).toBe(
       'user.profile.friends[0].name',
     )
   })

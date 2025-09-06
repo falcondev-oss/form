@@ -1,6 +1,9 @@
 packages:
   - packages/*
 
+patchedDependencies:
+  on-change: patches/on-change.patch
+
 onlyBuiltDependencies:
   - esbuild
   - unrs-resolver

@@ -17,7 +17,7 @@ import { getProperty, setProperty } from 'dot-prop'
 import { isDeepEqual } from 'remeda'
 import { refEffect } from './reactive'
 import { extend, setContext } from './types'
-import { issuePathToDotNotation } from './util'
+import { pathSegmentsToPathString } from './util'
 import { getValidatorByPath } from './validator'
 
 export type Form<Schema extends FormSchema> = {
@@ -53,7 +53,7 @@ export class FormField<T, Schema extends FormSchema> {
   #sourceValue: ComputedRef<T>
   api: FormFieldInternal<T>
 
-  async #validate() {
+  async validate() {
     const formResult = await Promise.resolve(
       this.#form.opts.schema['~standard'].validate(this.#form.data),
     )
@@ -66,7 +66,7 @@ export class FormField<T, Schema extends FormSchema> {
     this.#validationError.value = {
       issues: formResult.issues.filter((issue) => {
         if (!issue.path) return false
-        const issuePath = issuePathToDotNotation(issue.path)
+        const issuePath = pathSegmentsToPathString(issue.path)
         return issuePath === this.#context.value.path
       }),
     } satisfies StandardSchemaV1.FailureResult
@@ -108,7 +108,7 @@ export class FormField<T, Schema extends FormSchema> {
       value,
     )
 
-    if (this.#errors.value && this.#errors.value.length > 0) void this.#validate()
+    if (this.#errors.value && this.#errors.value.length > 0) void this.validate()
   }
   #handleBlur() {
     if (this.#form.disabled.value) {
@@ -123,7 +123,7 @@ export class FormField<T, Schema extends FormSchema> {
     // console.debug(`======== handleBlur (${pathRef.value})`)
     if (this.#updateCount.value === 0) return
 
-    void this.#validate()
+    void this.validate()
   }
   #reset() {
     if (this.#form.disabled.value) {
@@ -175,7 +175,7 @@ export class FormField<T, Schema extends FormSchema> {
         ? ({
             issues: form.error.value.issues.filter((issue) => {
               if (!issue.path) return false
-              const issuePath = issuePathToDotNotation(issue.path)
+              const issuePath = pathSegmentsToPathString(issue.path)
               return issuePath === this.#context.value.path
             }),
           } satisfies StandardSchemaV1.FailureResult)
