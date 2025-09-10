@@ -4,6 +4,7 @@ import type { NestedHooks } from 'hookable'
 import type {
   IfUnknown,
   IsAny,
+  IsLiteral,
   IsNever,
   IsStringLiteral,
   IsSymbolLiteral,
@@ -30,7 +31,7 @@ type ObjectHasFunctionsOrSymbols<T> =
           : false
 
 export type NullableDeep<T> =
-  GetDiscriminator<T> extends infer Discriminator
+  GetDiscriminator<T> extends infer DiscriminatorKey
     ? T extends object
       ? T extends any[]
         ? NullableDeep<T[number]>[] | null
@@ -38,7 +39,7 @@ export type NullableDeep<T> =
           ? T | null
           :
               | Simplify<{
-                  [K in keyof T]: K extends Discriminator ? T[K] : NullableDeep<T[K]>
+                  [K in keyof T]: K extends DiscriminatorKey ? T[K] | null : NullableDeep<T[K]>
                 }>
               | (keyof PickIndexSignature<T> extends never ? null : never)
       : T | null
@@ -122,38 +123,41 @@ export type FormFieldAccessor<T> = {
   }) => NoInfer<FormField<IfUnknown<O, T, O>>>
 }
 
-// eslint-disable-next-line unused-imports/no-unused-vars
-declare const NullSymbol: unique symbol
-type FormFieldAccessorDiscriminator<T, Discriminator extends string> = {
+type FormFieldDiscriminatorAccessor<T, DiscriminatorKey extends PropertyKey> = {
   $use: <
     Opts extends {
-      discriminator?: Discriminator
+      discriminator?: DiscriminatorKey
     },
   >(
     opts?: Opts,
   ) => Opts extends { discriminator: string }
-    ? {
-        [D in (T[Extract<keyof T, Discriminator>] & string) | typeof NullSymbol]: Simplify<
-          Record<Discriminator, D extends typeof NullSymbol ? null : D> & {
-            $field: BuildFormFieldAccessors<
-              D extends typeof NullSymbol ? null : Extract<T, Record<Discriminator, D>>,
-              true
-            >
-          }
-        >
-      }[(T[Extract<keyof T, Discriminator>] & string) | typeof NullSymbol]
+    ? DistributeField<T, DiscriminatorKey, T[Extract<keyof T, DiscriminatorKey>]>
     : FormField<T>
 }
 
+type DistributeField<
+  T,
+  DiscriminatorKey extends PropertyKey,
+  DiscriminatorValue,
+> = DiscriminatorValue extends any
+  ? Simplify<
+      Record<DiscriminatorKey, DiscriminatorValue> & {
+        $field: BuildFormFieldAccessors<
+          ExtractByPropertyValue<T, DiscriminatorKey, DiscriminatorValue>,
+          true
+        >
+      }
+    >
+  : never
+
 export type FormFieldAccessorOptions<T> = Parameters<FormFieldAccessor<T>['$use']>[0] &
-  Parameters<FormFieldAccessorDiscriminator<T, string>['$use']>[0]
+  Parameters<FormFieldDiscriminatorAccessor<T, string>['$use']>[0]
 
 type GetDiscriminator<T> =
   IsUnion<T> extends true
-    ? { [K in keyof T as IsStringLiteral<T[K]> extends true ? K : never]: T[K] } extends Record<
-        infer D,
-        any
-      >
+    ? {
+        [K in keyof T as IsLiteral<NonNullable<T[K]>> extends true ? K : never]: T[K]
+      } extends Record<infer D, any>
       ? D
       : never
     : never
@@ -180,20 +184,43 @@ export type BuildFormFieldAccessors<T, StopDiscriminator = false> = [IsAny<T>] e
         ? ObjectHasFunctionsOrSymbols<T> extends true
           ? FormFieldAccessor<T>
           : GetDiscriminator<NonNullable<T>> extends (StopDiscriminator extends true ? any : never)
-            ? {
+            ? // regular object
+              {
                 [K in keyof NonNullable<T>]-?: BuildFormFieldAccessors<NonNullable<T>[K]>
               }
-            : GetDiscriminator<NonNullable<T>> extends infer Discriminator extends string
-              ? NonNullable<T> extends Record<Discriminator, infer Options extends string>
-                ? {
-                    [O in Options]: BuildFormFieldAccessors<
-                      ExtractByPropertyValue<NonNullable<T>, Discriminator, O>
-                    >
-                  }[Options] &
-                    FormFieldAccessorDiscriminator<NonNullable<T>, Discriminator>
+            : // discriminated union object
+              GetDiscriminator<NonNullable<T>> extends infer DiscriminatorKey extends PropertyKey
+              ? NonNullable<T> extends Record<
+                  DiscriminatorKey,
+                  infer DiscriminatorValue extends DiscriminatorValueType | null
+                >
+                ? DistributeDiscriminatedProperties<
+                    NonNullable<T>,
+                    DiscriminatorKey,
+                    NonNullable<DiscriminatorValue>
+                  > &
+                    // combine all discriminator values into one accessor:
+                    // FormFieldAccessor<'A'> | FormFieldAccessor<'B'> => FormFieldAccessor<'A' | 'B'>
+                    Record<DiscriminatorKey, FormFieldAccessor<NonNullable<T>[DiscriminatorKey]>> &
+                    FormFieldDiscriminatorAccessor<NonNullable<T>, DiscriminatorKey>
                 : never
               : never
         : FormFieldAccessor<T>
 
+type DistributeDiscriminatedProperties<
+  T,
+  DiscriminatorKey extends PropertyKey,
+  DiscriminatorValue,
+> = T extends any
+  ? BuildFormFieldAccessors<
+      Omit<
+        ExtractByPropertyValue<NonNullable<T>, DiscriminatorKey, DiscriminatorValue>,
+        DiscriminatorKey
+      >
+    >
+  : never
+
 type ExtractByPropertyValue<T, K extends PropertyKey, V> =
   T extends Record<K, infer U> ? (V extends U ? T : never) : never
+
+type DiscriminatorValueType = string | number | symbol | boolean

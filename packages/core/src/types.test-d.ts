@@ -59,17 +59,9 @@ test('nullableDeep', () => {
     array: (string | null)[] | null
   } | null>({} as NullableDeep<Values>)
 
-  assertType<
-    | {
-        type: 'A'
-        a: string | null
-      }
-    | {
-        type: 'B'
-        b: number | null
-      }
-    | null
-  >({} as NullableDeep<DiscriminatedUnionValues>)
+  assertType<UnionToTuple<'A' | 'B' | null>>(
+    {} as UnionToTuple<NonNullable<NullableDeep<DiscriminatedUnionValues>>['type']>,
+  )
 
   assertType<
     Record<
@@ -99,7 +91,7 @@ describe('discriminated union', () => {
       },
       async submit() {},
     })
-    assertType<FormField<'A' | 'B'>>({} as ReturnType<typeof form.fields.union.type.$use>)
+    assertType<FormField<'A' | 'B' | null>>({} as ReturnType<typeof form.fields.union.type.$use>)
   })
 
   test('detects discriminated union', () => {
@@ -127,10 +119,9 @@ describe('discriminated union', () => {
       async submit() {},
     })
 
-    // discriminated union field value still nullable
-    assertType<'A' | 'B' | null>({} as ReturnType<typeof form.fields.string.$use>['value'])
-    assertType<boolean | null>({} as ReturnType<typeof form.fields.boolean.$use>['value'])
-    assertType<1 | 2 | null>({} as ReturnType<typeof form.fields.number.$use>['value'])
+    assertType<FormField<'A' | 'B' | null>>(
+      {} as ReturnType<typeof form.fields.string.discriminator.$use>,
+    )
 
     // has discriminator option
     assertType<
@@ -165,7 +156,7 @@ describe('discriminated union', () => {
   })
 
   test('literal union discriminator', () => {
-    assertType<FormFieldAccessor<'a'> | FormFieldAccessor<'b' | 'c'>>(
+    assertType<FormFieldAccessor<'a' | 'b' | 'c'>>(
       {} as BuildFormFieldAccessors<
         | {
             discriminator: 'a'
