@@ -105,7 +105,7 @@ export function useForm<const Schema extends FormSchema>(
   return form
 }
 
-export function FormField<T, P extends object>(
+export function FormFieldMemo<T, P extends object>(
   component: FunctionComponent<P & FormFieldProps<T>>,
 ): NamedExoticComponent<P & FormFieldProps<T>> {
   const prevTick = ref<unknown>()
@@ -121,6 +121,7 @@ export function FormField<T, P extends object>(
 }
 
 export type {
+  FormField,
   FormFieldProps,
   FormFields,
   FormFieldTranslator,

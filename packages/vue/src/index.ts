@@ -59,6 +59,7 @@ export function useForm<const Schema extends FormSchema>(
 }
 
 export type {
+  FormField,
   FormFieldProps,
   FormFields,
   FormFieldTranslator,
