@@ -11,6 +11,7 @@ import type {
   IsUnknown,
   PickIndexSignature,
   Primitive,
+  SetRequired,
   Simplify,
   Writable,
 } from 'type-fest'
@@ -147,16 +148,6 @@ type FormFieldAccessorDiscriminator<T, Discriminator extends string> = {
 export type FormFieldAccessorOptions<T> = Parameters<FormFieldAccessor<T>['$use']>[0] &
   Parameters<FormFieldAccessorDiscriminator<T, string>['$use']>[0]
 
-// export const ErrorMessageSymbol: unique symbol = Symbol('ErrorMessageSymbol')
-// type Error<M> = { [ErrorMessageSymbol]: M }
-
-// const _schema = z.object({ list: z.array(z.object({ name: z.string() })) })
-// type TestTestTestTestTestTestTestTestTestTest = BuildFormFieldAccessors<FormData<typeof _schema>>
-// const asdasdas = {} as TestTestTestTestTestTestTestTestTestTest
-
-// const _asdasd = asdasdas.list.$use().value.value
-// const _asdasd2 = asdasdas.list.at(0)!.$use().value.value?.name
-
 type GetDiscriminator<T> =
   IsUnion<T> extends true
     ? { [K in keyof T as IsStringLiteral<T[K]> extends true ? K : never]: T[K] } extends Record<
@@ -168,26 +159,6 @@ type GetDiscriminator<T> =
     : never
 
 export type FormFields<T> = BuildFormFieldAccessors<NullableDeep<T>>
-
-// type AAAAAAAAAA = BuildFormFieldAccessors<{
-//   person: string
-// }>
-// type dddddddd = AAAAAAAAAA['']
-
-type TTTT =
-  | {
-      salutation: 'company'
-      company: string
-      firstName: string | null
-      lastName: string | null
-    }
-  | {
-      salutation: 'mr' | 'ms'
-      company: string | null
-      firstName: string
-      lastName: string
-    }
-type _AAAAAAAAAA = BuildFormFieldAccessors<TTTT>
 
 export type BuildFormFieldAccessors<T, StopDiscriminator = false> = [IsAny<T>] extends [true]
   ? FormFieldAccessor<any>
@@ -209,8 +180,8 @@ export type BuildFormFieldAccessors<T, StopDiscriminator = false> = [IsAny<T>] e
         ? ObjectHasFunctionsOrSymbols<T> extends true
           ? FormFieldAccessor<T>
           : GetDiscriminator<NonNullable<T>> extends (StopDiscriminator extends true ? any : never)
-            ? FormFieldAccessor<T> & {
-                [K in keyof NonNullable<T>]: BuildFormFieldAccessors<NonNullable<T>[K]>
+            ? {
+                [K in keyof NonNullable<T>]-?: BuildFormFieldAccessors<NonNullable<T>[K]>
               }
             : GetDiscriminator<NonNullable<T>> extends infer Discriminator extends string
               ? NonNullable<T> extends Record<Discriminator, infer Options extends string>

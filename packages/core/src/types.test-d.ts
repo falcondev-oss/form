@@ -1,4 +1,4 @@
-import type { UnionToTuple } from 'type-fest'
+import type { SetRequired, UnionToTuple } from 'type-fest'
 import type { BuildFormFieldAccessors, FormField, FormFieldAccessor, NullableDeep } from './types'
 import { assertType, describe, test } from 'vitest'
 import z from 'zod'
@@ -180,20 +180,35 @@ describe('discriminated union', () => {
   })
 })
 
-test('FormField', () => {
-  const form = useFormCore({
-    schema: z.object({
-      number: z.number(),
-    }),
-    sourceValues: {
-      number: null,
-    },
-    async submit() {},
+describe('FormField', () => {
+  test('$use() translate option NoInfer', () => {
+    const form = useFormCore({
+      schema: z.object({
+        number: z.number().optional(),
+      }),
+      sourceValues: {
+        number: null,
+      },
+      async submit() {},
+    })
+
+    const _: {
+      field: FormField<string | null>
+    } = {
+      // @ts-expect-error this should not work because FormField<number | null> is not assignable to FormField<string | null>
+      field: form.fields.number.$use(),
+    }
   })
-  const _: {
-    field: FormField<string | null>
-  } = {
-    // @ts-expect-error this should not work because FormField<number | null> is not assignable to FormField<string | null>
-    field: form.fields.number.$use(),
-  }
+
+  test('key-optional properties', () => {
+    assertType<{
+      a: FormFieldAccessor<number | null | undefined>
+    }>(
+      {} as BuildFormFieldAccessors<
+        NullableDeep<{
+          a?: number | undefined
+        }>
+      >,
+    )
+  })
 })
