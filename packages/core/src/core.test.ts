@@ -75,7 +75,7 @@ describe('form', () => {
 })
 
 describe('field', () => {
-  test.only('errors', async () => {
+  test('errors', async () => {
     const form = useFormCore({
       schema: z.object({
         age: z.number(),
@@ -187,7 +187,16 @@ describe('field', () => {
     expect(unionField.type).toBeNull()
     expect(unionField.$field.$use().value).toEqual(null)
     if (unionField.type === null) {
-      expectTypeOf(unionField.$field.$use().value).toEqualTypeOf<null>()
+      expectTypeOf(unionField.$field.$use().value).toEqualTypeOf<
+        | Readonly<{
+            type: 'A' | null
+            value: string | null
+          }>
+        | Readonly<{
+            type: 'B' | null
+            value: number | null
+          }>
+      >()
     }
     data.value = loadedData
 
@@ -195,7 +204,7 @@ describe('field', () => {
     if (unionField.type === 'A') {
       expectTypeOf(unionField.$field.$use().value).toEqualTypeOf<
         Readonly<{
-          type: 'A'
+          type: 'A' | null
           value: string | null
         }>
       >()
@@ -206,7 +215,7 @@ describe('field', () => {
     if (unionField.type === 'B') {
       expectTypeOf(unionField.$field.$use().value).toEqualTypeOf<
         Readonly<{
-          type: 'B'
+          type: 'B' | null
           value: number | null
         }>
       >()

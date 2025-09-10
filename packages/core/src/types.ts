@@ -1,18 +1,15 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
-import type { Reactive } from '@vue/reactivity'
+import type { Reactive, UnwrapNestedRefs } from '@vue/reactivity'
 import type { NestedHooks } from 'hookable'
 import type {
   IfUnknown,
   IsAny,
   IsLiteral,
-  IsNever,
-  IsStringLiteral,
   IsSymbolLiteral,
   IsTuple,
   IsUnknown,
   PickIndexSignature,
   Primitive,
-  SetRequired,
   Simplify,
   Writable,
 } from 'type-fest'
@@ -50,7 +47,7 @@ export type FormData<Schema extends FormSchema> = NonNullable<
   NullableDeep<StandardSchemaV1.InferOutput<Schema>>
 >
 
-export const extendsSymbol = Symbol('extends')
+export const extend = Symbol('extend')
 
 type MaybeGetter<T extends object | undefined> = T | (() => T)
 
@@ -62,7 +59,8 @@ export interface FormOptions<
   sourceValues: MaybeGetter<Writable<FormData<Schema>> | undefined>
   submit: (ctx: { values: Output }) => Promise<void | { success: boolean }>
   hooks?: NestedHooks<FormHooks<Schema>>
-  [extendsSymbol]?: {
+  [extend]?: {
+    setup?: <T>(field: FormFieldInternal<T>) => FormFieldExtend<T>
     $use?: <T>(field: FormFieldInternal<T>) => FormFieldExtend<T>
   }
 }
@@ -83,7 +81,7 @@ export interface FormHooks<
   afterFieldChange: (field: FormFieldInternal<unknown>, updatedValue: unknown | null) => void
 }
 
-export const contextSymbol = Symbol('context')
+export const setContext = Symbol('setContext')
 
 export type NonPrimitiveReadonly<T> = T extends Primitive ? T : Readonly<T>
 export type FormFieldInternal<T> = {
@@ -99,17 +97,17 @@ export type FormFieldInternal<T> = {
   key: string
   validator: ZodType | undefined
   $?: () => BuildFormFieldAccessors<any>
-  [contextSymbol]: (ctx: { path: string }) => void
+  [setContext]: (ctx: { path: string }) => void
 }
-export type FormFieldContext<T> = Parameters<FormFieldInternal<T>[typeof contextSymbol]>[0]
+export type FormFieldContext<T> = Parameters<FormFieldInternal<T>[typeof setContext]>[0]
 
 // eslint-disable-next-line unused-imports/no-unused-vars
 export interface FormFieldExtend<T> {}
 
 export interface FormField<T>
   extends Omit<FormFieldInternal<T>, '$'>,
-    Reactive<FormFieldExtend<T>> {
-  $: <TT extends T>() => BuildFormFieldAccessors<TT>
+    UnwrapNestedRefs<FormFieldExtend<T>> {
+  $: () => BuildFormFieldAccessors<T>
 }
 export type FormFieldProps<T> = { field: FormField<NullableDeep<T>> }
 
@@ -166,46 +164,44 @@ export type FormFields<T> = BuildFormFieldAccessors<NullableDeep<T>>
 
 export type BuildFormFieldAccessors<T, StopDiscriminator = false> = [IsAny<T>] extends [true]
   ? FormFieldAccessor<any>
-  : [IsNever<T>] extends [true]
-    ? FormFieldAccessor<never>
-    : [T] extends [(infer TT extends unknown[]) | null]
-      ? {
-          at: <const I extends number>(
-            index: I,
-          ) => [undefined] extends [TT[I]]
-            ? undefined
-            : BuildFormFieldAccessors<TT[I]> | (IsTuple<TT> extends true ? never : undefined)
-          delete: (key: string) => void
-          [Symbol.iterator]: () => ArrayIterator<
-            Reactive<BuildFormFieldAccessors<NonNullable<TT>[number]>>
-          >
-        } & FormFieldAccessor<T>
-      : [NonNullable<T>] extends [Record<string, unknown>]
-        ? ObjectHasFunctionsOrSymbols<T> extends true
-          ? FormFieldAccessor<T>
-          : GetDiscriminator<NonNullable<T>> extends (StopDiscriminator extends true ? any : never)
-            ? // regular object
-              {
-                [K in keyof NonNullable<T>]-?: BuildFormFieldAccessors<NonNullable<T>[K]>
-              }
-            : // discriminated union object
-              GetDiscriminator<NonNullable<T>> extends infer DiscriminatorKey extends PropertyKey
-              ? NonNullable<T> extends Record<
+  : [T] extends [(infer TT extends unknown[]) | null]
+    ? {
+        at: <const I extends number>(
+          index: I,
+        ) => [undefined] extends [TT[I]]
+          ? undefined
+          : BuildFormFieldAccessors<TT[I]> | (IsTuple<TT> extends true ? never : undefined)
+        delete: (key: string) => void
+        [Symbol.iterator]: () => ArrayIterator<
+          Reactive<BuildFormFieldAccessors<NonNullable<TT>[number]>>
+        >
+      } & FormFieldAccessor<T>
+    : [NonNullable<T>] extends [Record<string, unknown>]
+      ? ObjectHasFunctionsOrSymbols<T> extends true
+        ? FormFieldAccessor<T>
+        : GetDiscriminator<NonNullable<T>> extends (StopDiscriminator extends true ? any : never)
+          ? // regular object
+            FormFieldAccessor<T> & {
+              [K in keyof NonNullable<T>]-?: BuildFormFieldAccessors<NonNullable<T>[K]>
+            }
+          : // discriminated union object
+            GetDiscriminator<NonNullable<T>> extends infer DiscriminatorKey extends PropertyKey
+            ? NonNullable<T> extends Record<
+                DiscriminatorKey,
+                infer DiscriminatorValue extends DiscriminatorValueType | null
+              >
+              ? DistributeDiscriminatedProperties<
+                  NonNullable<T>,
                   DiscriminatorKey,
-                  infer DiscriminatorValue extends DiscriminatorValueType | null
-                >
-                ? DistributeDiscriminatedProperties<
-                    NonNullable<T>,
-                    DiscriminatorKey,
-                    NonNullable<DiscriminatorValue>
-                  > &
-                    // combine all discriminator values into one accessor:
-                    // FormFieldAccessor<'A'> | FormFieldAccessor<'B'> => FormFieldAccessor<'A' | 'B'>
-                    Record<DiscriminatorKey, FormFieldAccessor<NonNullable<T>[DiscriminatorKey]>> &
-                    FormFieldDiscriminatorAccessor<NonNullable<T>, DiscriminatorKey>
-                : never
+                  NonNullable<DiscriminatorValue>
+                > &
+                  // combine all discriminator values into one accessor:
+                  // FormFieldAccessor<'A'> | FormFieldAccessor<'B'> => FormFieldAccessor<'A' | 'B'>
+                  Record<DiscriminatorKey, FormFieldAccessor<NonNullable<T>[DiscriminatorKey]>> &
+                  FormFieldDiscriminatorAccessor<NonNullable<T>, DiscriminatorKey>
               : never
-        : FormFieldAccessor<T>
+            : never
+      : FormFieldAccessor<T>
 
 type DistributeDiscriminatedProperties<
   T,

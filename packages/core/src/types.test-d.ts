@@ -1,4 +1,4 @@
-import type { SetRequired, UnionToTuple } from 'type-fest'
+import type { UnionToTuple } from 'type-fest'
 import type { BuildFormFieldAccessors, FormField, FormFieldAccessor, NullableDeep } from './types'
 import { assertType, describe, test } from 'vitest'
 import z from 'zod'
