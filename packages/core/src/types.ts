@@ -1,9 +1,10 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
-import type { Reactive, UnwrapNestedRefs } from '@vue/reactivity'
+import type { Reactive } from '@vue/reactivity'
 import type { NestedHooks } from 'hookable'
 import type {
   IfUnknown,
   IsAny,
+  IsNever,
   IsStringLiteral,
   IsSymbolLiteral,
   IsTuple,
@@ -47,7 +48,7 @@ export type FormData<Schema extends FormSchema> = NonNullable<
   NullableDeep<StandardSchemaV1.InferOutput<Schema>>
 >
 
-export const extend = Symbol('extend')
+export const extendsSymbol = Symbol('extends')
 
 type MaybeGetter<T extends object | undefined> = T | (() => T)
 
@@ -59,8 +60,7 @@ export interface FormOptions<
   sourceValues: MaybeGetter<Writable<FormData<Schema>> | undefined>
   submit: (ctx: { values: Output }) => Promise<void | { success: boolean }>
   hooks?: NestedHooks<FormHooks<Schema>>
-  [extend]?: {
-    setup?: <T>(field: FormFieldInternal<T>) => FormFieldExtend<T>
+  [extendsSymbol]?: {
     $use?: <T>(field: FormFieldInternal<T>) => FormFieldExtend<T>
   }
 }
@@ -81,7 +81,7 @@ export interface FormHooks<
   afterFieldChange: (field: FormFieldInternal<unknown>, updatedValue: unknown | null) => void
 }
 
-export const setContext = Symbol('setContext')
+export const contextSymbol = Symbol('context')
 
 export type NonPrimitiveReadonly<T> = T extends Primitive ? T : Readonly<T>
 export type FormFieldInternal<T> = {
@@ -97,17 +97,17 @@ export type FormFieldInternal<T> = {
   key: string
   validator: ZodType | undefined
   $?: () => BuildFormFieldAccessors<any>
-  [setContext]: (ctx: { path: string }) => void
+  [contextSymbol]: (ctx: { path: string }) => void
 }
-export type FormFieldContext<T> = Parameters<FormFieldInternal<T>[typeof setContext]>[0]
+export type FormFieldContext<T> = Parameters<FormFieldInternal<T>[typeof contextSymbol]>[0]
 
 // eslint-disable-next-line unused-imports/no-unused-vars
 export interface FormFieldExtend<T> {}
 
 export interface FormField<T>
   extends Omit<FormFieldInternal<T>, '$'>,
-    UnwrapNestedRefs<FormFieldExtend<T>> {
-  $: () => BuildFormFieldAccessors<T>
+    Reactive<FormFieldExtend<T>> {
+  $: <TT extends T>() => BuildFormFieldAccessors<TT>
 }
 export type FormFieldProps<T> = { field: FormField<NullableDeep<T>> }
 
@@ -115,7 +115,7 @@ export type FormFieldTranslator<T, O> = {
   get: (v: T) => O
   set: (v: O) => T
 }
-type FormFieldAccessor<T> = {
+export type FormFieldAccessor<T> = {
   $use: <O>(opts?: {
     translate?: FormFieldTranslator<T, O>
   }) => NoInfer<FormField<IfUnknown<O, T, O>>>
@@ -174,37 +174,55 @@ export type FormFields<T> = BuildFormFieldAccessors<NullableDeep<T>>
 // }>
 // type dddddddd = AAAAAAAAAA['']
 
+type TTTT =
+  | {
+      salutation: 'company'
+      company: string
+      firstName: string | null
+      lastName: string | null
+    }
+  | {
+      salutation: 'mr' | 'ms'
+      company: string | null
+      firstName: string
+      lastName: string
+    }
+type _AAAAAAAAAA = BuildFormFieldAccessors<TTTT>
+
 export type BuildFormFieldAccessors<T, StopDiscriminator = false> = [IsAny<T>] extends [true]
   ? FormFieldAccessor<any>
-  : [T] extends [(infer TT extends unknown[]) | null]
-    ? {
-        at: <const I extends number>(
-          index: I,
-        ) => [undefined] extends [TT[I]]
-          ? undefined
-          : BuildFormFieldAccessors<TT[I]> | (IsTuple<TT> extends true ? never : undefined)
-        delete: (key: string) => void
-        [Symbol.iterator]: () => ArrayIterator<
-          Reactive<BuildFormFieldAccessors<NonNullable<TT>[number]>>
-        >
-      } & FormFieldAccessor<T>
-    : [NonNullable<T>] extends [Record<string, unknown>]
-      ? ObjectHasFunctionsOrSymbols<T> extends true
-        ? FormFieldAccessor<T>
-        : GetDiscriminator<NonNullable<T>> extends (StopDiscriminator extends true ? any : never)
-          ? FormFieldAccessor<T> & {
-              [K in keyof NonNullable<T>]: BuildFormFieldAccessors<NonNullable<T>[K]>
-            }
-          : GetDiscriminator<NonNullable<T>> extends infer Discriminator extends string
-            ? NonNullable<T> extends Record<Discriminator, infer Options extends string>
-              ? {
-                  [O in Options]: BuildFormFieldAccessors<
-                    Extract<NonNullable<T>, Record<Discriminator, O>>
-                  >
-                }[Options] &
-                  FormFieldAccessorDiscriminator<NonNullable<T>, Discriminator>
+  : [IsNever<T>] extends [true]
+    ? FormFieldAccessor<never>
+    : [T] extends [(infer TT extends unknown[]) | null]
+      ? {
+          at: <const I extends number>(
+            index: I,
+          ) => [undefined] extends [TT[I]]
+            ? undefined
+            : BuildFormFieldAccessors<TT[I]> | (IsTuple<TT> extends true ? never : undefined)
+          delete: (key: string) => void
+          [Symbol.iterator]: () => ArrayIterator<
+            Reactive<BuildFormFieldAccessors<NonNullable<TT>[number]>>
+          >
+        } & FormFieldAccessor<T>
+      : [NonNullable<T>] extends [Record<string, unknown>]
+        ? ObjectHasFunctionsOrSymbols<T> extends true
+          ? FormFieldAccessor<T>
+          : GetDiscriminator<NonNullable<T>> extends (StopDiscriminator extends true ? any : never)
+            ? FormFieldAccessor<T> & {
+                [K in keyof NonNullable<T>]: BuildFormFieldAccessors<NonNullable<T>[K]>
+              }
+            : GetDiscriminator<NonNullable<T>> extends infer Discriminator extends string
+              ? NonNullable<T> extends Record<Discriminator, infer Options extends string>
+                ? {
+                    [O in Options]: BuildFormFieldAccessors<
+                      ExtractByPropertyValue<NonNullable<T>, Discriminator, O>
+                    >
+                  }[Options] &
+                    FormFieldAccessorDiscriminator<NonNullable<T>, Discriminator>
+                : never
               : never
-            : never
-      : FormFieldAccessor<T>
+        : FormFieldAccessor<T>
 
-// type TEST = BuildFormFieldAccessors<ZodObject['_zod']['output']>
+type ExtractByPropertyValue<T, K extends PropertyKey, V> =
+  T extends Record<K, infer U> ? (V extends U ? T : never) : never

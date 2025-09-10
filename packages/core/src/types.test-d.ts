@@ -1,5 +1,5 @@
 import type { UnionToTuple } from 'type-fest'
-import type { FormField, NullableDeep } from './types'
+import type { BuildFormFieldAccessors, FormField, FormFieldAccessor, NullableDeep } from './types'
 import { assertType, describe, test } from 'vitest'
 import z from 'zod'
 import { useFormCore } from './core'
@@ -161,6 +161,21 @@ describe('discriminated union', () => {
     )
     assertType<UnionToTuple<1 | 2 | null>>(
       {} as UnionToTuple<ReturnType<typeof form.fields.number.discriminator.$use>['value']>,
+    )
+  })
+
+  test('literal union discriminator', () => {
+    assertType<FormFieldAccessor<'a'> | FormFieldAccessor<'b' | 'c'>>(
+      {} as BuildFormFieldAccessors<
+        | {
+            discriminator: 'a'
+            a: string
+          }
+        | {
+            discriminator: 'b' | 'c'
+            bc: number
+          }
+      >['discriminator'],
     )
   })
 })
