@@ -137,7 +137,7 @@ type DistributeField<
 > = DiscriminatorValue extends any
   ? Simplify<
       {
-        [K in DiscriminatorKey]: T[K & keyof T]
+        [K in DiscriminatorKey]: Extract<T[K & keyof T], DiscriminatorValue>
       } & {
         $field: BuildFormFieldAccessors<
           ExtractByPropertyValue<T, DiscriminatorKey, DiscriminatorValue>,
