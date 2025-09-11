@@ -136,7 +136,9 @@ type DistributeField<
   DiscriminatorValue,
 > = DiscriminatorValue extends any
   ? Simplify<
-      Record<DiscriminatorKey, DiscriminatorValue> & {
+      {
+        [K in DiscriminatorKey]: T[K & keyof T]
+      } & {
         $field: BuildFormFieldAccessors<
           ExtractByPropertyValue<T, DiscriminatorKey, DiscriminatorValue>,
           true
@@ -194,8 +196,10 @@ export type BuildFormFieldAccessors<T, StopDiscriminator = false> = [IsAny<T>] e
                 > &
                   // combine all discriminator values into one accessor:
                   // FormFieldAccessor<'A'> | FormFieldAccessor<'B'> => FormFieldAccessor<'A' | 'B'>
-                  Record<DiscriminatorKey, FormFieldAccessor<NonNullable<T>[DiscriminatorKey]>> &
-                  FormFieldDiscriminatorAccessor<NonNullable<T>, DiscriminatorKey>
+                  // also handles multiple discriminator keys
+                  {
+                    [K in DiscriminatorKey]: FormFieldAccessor<NonNullable<T>[K]>
+                  } & FormFieldDiscriminatorAccessor<NonNullable<T>, DiscriminatorKey>
               : never
             : never
       : FormFieldAccessor<T>

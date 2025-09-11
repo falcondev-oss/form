@@ -169,6 +169,26 @@ describe('discriminated union', () => {
       >['discriminator'],
     )
   })
+
+  test('multiple discriminators', () => {
+    type Data =
+      | {
+          d1: 'a'
+          d2: 'b'
+          prop: string
+        }
+      | {
+          d1: 'c'
+          d2: 'd'
+          prop: number
+        }
+
+    assertType<{
+      d1: FormFieldAccessor<'a' | 'c'>
+      d2: FormFieldAccessor<'b' | 'd'>
+      prop: FormFieldAccessor<string> | FormFieldAccessor<number>
+    }>({} as BuildFormFieldAccessors<Data>)
+  })
 })
 
 describe('FormField', () => {
