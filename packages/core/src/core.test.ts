@@ -281,7 +281,7 @@ describe('hooks', () => {
     const result = await form.submit()
 
     expect(result.success).toBe(true)
-    expect(beforeSubmitSpy).toHaveBeenCalledWith({ values: { name: 'John' } })
+    expect(beforeSubmitSpy).toHaveBeenCalledWith({ data: { name: 'John' } })
     expect(afterSubmitSpy).toHaveBeenCalledWith({ success: true })
     expect(beforeSubmitSpy).toHaveBeenCalledBefore(afterSubmitSpy)
   })

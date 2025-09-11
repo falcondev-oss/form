@@ -304,6 +304,7 @@ export function useFormCore<
     errors: computed(() => formError.value?.issues),
     reset,
     submit: async () => {
+      await hooks.callHook('beforeSubmit', { data: observedFormData })
       isLoading.value = true
 
       try {
@@ -315,18 +316,22 @@ export function useFormCore<
         }
 
         const ctx = { values: validationResult }
-        await hooks.callHook('beforeSubmit', ctx)
         const submitResult = (await formOpts.submit(ctx)) ?? { success: true }
-        await hooks.callHook('afterSubmit', submitResult)
 
         if (submitResult.success) formUpdateCount.value = 0
+
+        isLoading.value = false
+        await hooks.callHook('afterSubmit', submitResult)
 
         return submitResult
       } catch (err) {
         console.error(err)
-        return { success: false }
-      } finally {
         isLoading.value = false
+
+        const result = { success: false }
+        await hooks.callHook('afterSubmit', result)
+
+        return result
       }
     },
   } as const

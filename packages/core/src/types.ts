@@ -65,11 +65,8 @@ export interface FormOptions<
   }
 }
 
-export interface FormHooks<
-  Schema extends FormSchema,
-  Output extends StandardSchemaV1.InferOutput<Schema> = StandardSchemaV1.InferOutput<Schema>,
-> {
-  beforeSubmit: (ctx: { values: Output }) => Promise<void> | void
+export interface FormHooks<Schema extends FormSchema> {
+  beforeSubmit: (form: { data: Partial<FormData<Schema>> }) => Promise<void> | void
   afterSubmit: (result: { success: boolean }) => Promise<void> | void
   // beforeReset: () => Promise<void> | void
   // afterReset: () => Promise<void> | void
