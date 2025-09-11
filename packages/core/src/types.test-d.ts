@@ -1,5 +1,11 @@
 import type { UnionToTuple } from 'type-fest'
-import type { BuildFormFieldAccessors, FormField, FormFieldAccessor, NullableDeep } from './types'
+import type {
+  BuildFormFieldAccessors,
+  FormField,
+  FormFieldAccessor,
+  GetDiscriminator,
+  NullableDeep,
+} from './types'
 import { assertType, describe, test } from 'vitest'
 import z from 'zod'
 import { useFormCore } from './core'
@@ -71,6 +77,24 @@ test('nullableDeep', () => {
       } | null
     >
   >({} as NullableDeep<RecordValues>)
+})
+
+test('GetDiscriminator', () => {
+  assertType<['type']>(
+    {} as UnionToTuple<
+      GetDiscriminator<
+        | {
+            type: 'a'
+            literal: 'a' | 'b'
+            prop: number
+          }
+        | {
+            type: 'b'
+            prop: string
+          }
+      >
+    >,
+  )
 })
 
 describe('discriminated union', () => {

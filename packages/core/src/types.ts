@@ -150,13 +150,11 @@ type DistributeField<
 export type FormFieldAccessorOptions<T> = Parameters<FormFieldAccessor<T>['$use']>[0] &
   Parameters<FormFieldDiscriminatorAccessor<T, string>['$use']>[0]
 
-type GetDiscriminator<T> =
+export type GetDiscriminator<T> =
   IsUnion<T> extends true
-    ? {
+    ? keyof {
         [K in keyof T as IsLiteral<NonNullable<T[K]>> extends true ? K : never]: T[K]
-      } extends Record<infer D, any>
-      ? D
-      : never
+      }
     : never
 
 export type FormFields<T> = BuildFormFieldAccessors<NullableDeep<T>>
