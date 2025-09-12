@@ -1,7 +1,7 @@
 {
   "name": "@falcondev-oss/form",
   "type": "module",
-  "version": "0.12.4",
+  "version": "0.12.5",
   "private": true,
   "description": "Type-safe, framework agnostic form state library based on @vue/reactivity.",
   "license": "Apache-2.0",
