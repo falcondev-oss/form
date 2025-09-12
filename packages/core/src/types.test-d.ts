@@ -116,6 +116,14 @@ describe('discriminated union', () => {
       },
       async submit() {},
     })
+
+    assertType<
+      UnionToTuple<
+        | Readonly<{ type: 'A' | null; a: string | null }>
+        | Readonly<{ type: 'B' | null; b: number | null }>
+        | null
+      >
+    >({} as UnionToTuple<ReturnType<typeof form.fields.union.$use>['value']>)
     assertType<FormField<'A' | 'B' | null>>({} as ReturnType<typeof form.fields.union.type.$use>)
   })
 

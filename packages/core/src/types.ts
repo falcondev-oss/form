@@ -126,7 +126,11 @@ type FormFieldDiscriminatorAccessor<T, DiscriminatorKey extends PropertyKey> = {
   >(
     opts?: Opts,
   ) => Opts extends { discriminator: string }
-    ? DistributeField<T, DiscriminatorKey, T[Extract<keyof T, DiscriminatorKey>]>
+    ? DistributeField<
+        T,
+        DiscriminatorKey,
+        NonNullable<T>[Extract<keyof NonNullable<T>, DiscriminatorKey>]
+      >
     : FormField<T>
 }
 
@@ -137,10 +141,15 @@ type DistributeField<
 > = DiscriminatorValue extends any
   ? Simplify<
       {
-        [K in DiscriminatorKey]: Extract<T[K & keyof T], DiscriminatorValue>
+        [K in DiscriminatorKey]: Extract<
+          NonNullable<T>[K & keyof NonNullable<T>],
+          DiscriminatorValue
+        >
       } & {
         $field: BuildFormFieldAccessors<
-          ExtractByPropertyValue<T, DiscriminatorKey, DiscriminatorValue>,
+          T extends null
+            ? ExtractByPropertyValue<T, DiscriminatorKey, DiscriminatorValue> | null
+            : ExtractByPropertyValue<T, DiscriminatorKey, DiscriminatorValue>,
           true
         >
       }
@@ -216,7 +225,7 @@ export type BuildFormFieldAccessors<T, StopDiscriminator = false> = [IsAny<T>] e
                   // also handles multiple discriminator keys
                   {
                     [K in DiscriminatorKey]: FormFieldAccessor<NonNullable<T>[K]>
-                  } & FormFieldDiscriminatorAccessor<NonNullable<T>, DiscriminatorKey>
+                  } & FormFieldDiscriminatorAccessor<T, DiscriminatorKey>
               : never
             : never
       : FormFieldAccessor<T>

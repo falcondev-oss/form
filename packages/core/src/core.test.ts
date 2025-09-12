@@ -196,29 +196,26 @@ describe('field', () => {
             type: 'B' | null
             value: number | null
           }>
+        | null
       >()
     }
     data.value = loadedData
 
     expect(unionField.$field.$use().value).toEqual({ type: 'A', value: 'Hello' })
     if (unionField.type === 'A') {
-      expectTypeOf(unionField.$field.$use().value).toEqualTypeOf<
-        Readonly<{
-          type: 'A' | null
-          value: string | null
-        }>
-      >()
+      expectTypeOf(unionField.$field.$use().value).toEqualTypeOf<Readonly<{
+        type: 'A' | null
+        value: string | null
+      }> | null>()
     }
 
     form.data.union = { type: 'B', value: 42 }
     expect(unionField.$field.$use().value).toEqual({ type: 'B', value: 42 })
     if (unionField.type === 'B') {
-      expectTypeOf(unionField.$field.$use().value).toEqualTypeOf<
-        Readonly<{
-          type: 'B' | null
-          value: number | null
-        }>
-      >()
+      expectTypeOf(unionField.$field.$use().value).toEqualTypeOf<Readonly<{
+        type: 'B' | null
+        value: number | null
+      }> | null>()
     }
   })
 
