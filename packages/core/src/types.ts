@@ -152,15 +152,34 @@ export type FormFieldAccessorOptions<T> = Parameters<FormFieldAccessor<T>['$use'
 
 export type GetDiscriminator<T> =
   IsUnion<T> extends true
-    ? keyof {
-        [K in keyof T as IsLiteral<NonNullable<T[K]>> extends true ? K : never]: T[K]
-      }
+    ? keyof Omit<
+        {
+          [K in keyof T as IsLiteral<NonNullable<T[K]>> extends true ? K : never]: T[K]
+        },
+        keyof SharedUnionValueKeys<T>
+      >
     : never
+
+type CollectUnionValuesByKey<T, K extends PropertyKey> = T extends unknown
+  ? K extends keyof T
+    ? T[K]
+    : never
+  : never
+
+type IsDistinctUnionValue<
+  T,
+  K extends keyof T,
+  CollectedValues extends CollectUnionValuesByKey<T, K> = CollectUnionValuesByKey<T, K>,
+> = T extends any ? ([CollectedValues] extends [T[K]] ? false : true) : never
+
+type SharedUnionValueKeys<T, Keys extends keyof T = keyof T> = {
+  [K in Keys as IsDistinctUnionValue<T, K> extends false ? K : never]: true
+}
 
 export type FormFields<T> = BuildFormFieldAccessors<NullableDeep<T>>
 
 export type BuildFormFieldAccessors<T, StopDiscriminator = false> = [IsAny<T>] extends [true]
-  ? FormFieldAccessor<any>
+  ? FormFieldAccessor<any> | FormFieldDiscriminatorAccessor<any, PropertyKey>
   : [T] extends [(infer TT extends unknown[]) | null]
     ? {
         at: <const I extends number>(
@@ -207,11 +226,12 @@ type DistributeDiscriminatedProperties<
   DiscriminatorKey extends PropertyKey,
   DiscriminatorValue,
 > = T extends any
-  ? BuildFormFieldAccessors<
-      Omit<
-        ExtractByPropertyValue<NonNullable<T>, DiscriminatorKey, DiscriminatorValue>,
-        DiscriminatorKey
-      >
+  ? // omit discriminator here -> is added as extra field above
+    Omit<
+      BuildFormFieldAccessors<
+        ExtractByPropertyValue<NonNullable<T>, DiscriminatorKey, DiscriminatorValue>
+      >,
+      DiscriminatorKey
     >
   : never
 

@@ -90,6 +90,7 @@ test('GetDiscriminator', () => {
           }
         | {
             type: 'b'
+            literal: 'a' | 'b'
             prop: string
           }
       >
