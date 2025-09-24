@@ -1,6 +1,6 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
-import type { Reactive, UnwrapNestedRefs } from '@vue/reactivity'
-import type { NestedHooks } from 'hookable'
+import type { ComputedRef, Reactive, Ref, UnwrapNestedRefs } from '@vue/reactivity'
+import type { Hookable, NestedHooks } from 'hookable'
 import type {
   IfUnknown,
   IsAny,
@@ -106,7 +106,18 @@ export interface FormField<T>
     UnwrapNestedRefs<FormFieldExtend<T>> {
   $: () => BuildFormFieldAccessors<T>
 }
+
 export type FormFieldProps<T> = { field: FormField<NullableDeep<T>> }
+
+export type FormHandle = {
+  isChanged: ComputedRef<boolean>
+  isDirty: ComputedRef<boolean>
+  isLoading: Readonly<Ref<boolean>>
+  errors: ComputedRef<readonly StandardSchemaV1.Issue[] | undefined>
+  submit: () => Promise<unknown>
+  reset: () => void
+  hooks: Hookable<FormHooks<FormSchema>>
+}
 
 export type FormFieldTranslator<T, O> = {
   get: (v: T) => O

@@ -1,6 +1,5 @@
-import type { FormHooks, FormOptions, FormSchema } from '@falcondev-oss/form-core'
-import type { Hookable } from 'hookable'
-import type { MaybeRefOrGetter, Ref, ShallowRef, WritableComputedRef } from 'vue'
+import type { FormHandle, FormOptions, FormSchema } from '@falcondev-oss/form-core'
+import type { MaybeRefOrGetter, UnwrapNestedRefs, WritableComputedRef } from 'vue'
 import { extend, useFormCore } from '@falcondev-oss/form-core'
 import { computed, toValue } from 'vue'
 
@@ -10,30 +9,20 @@ declare module '@falcondev-oss/form-core' {
   }
 }
 
-type MaybeNonWritableRef<T> = T | Ref<T, T> | ShallowRef<T, T>
-
-export type FormHandle = {
-  isChanged: MaybeNonWritableRef<boolean>
-  isLoading: MaybeNonWritableRef<boolean>
-  errors: MaybeNonWritableRef<unknown> | undefined
-  submit: () => Promise<unknown>
-  reset: () => void
-  hooks: Hookable<FormHooks<FormSchema>>
-}
-
 export function useFormHandles(forms: MaybeRefOrGetter<FormHandle[]>) {
   return computed(() => {
     const forms_ = toValue(forms)
 
     return {
-      isChanged: forms_.some((f) => toValue(f.isChanged)),
-      isLoading: forms_.some((f) => toValue(f.isLoading)),
-      errors: forms_.find((f) => toValue(f.errors))?.errors,
+      isChanged: forms_.some((f) => f.isChanged.value),
+      isDirty: forms_.some((f) => f.isDirty.value),
+      isLoading: forms_.some((f) => f.isLoading.value),
+      errors: forms_.find((f) => f.errors.value)?.errors.value,
       submit: async () => Promise.all(forms_.map(async (f) => f.submit())),
       reset: () => {
         for (const f of forms_) f.reset()
       },
-    } satisfies Omit<FormHandle, 'hooks'>
+    } satisfies UnwrapNestedRefs<Omit<FormHandle, 'hooks'>>
   })
 }
 

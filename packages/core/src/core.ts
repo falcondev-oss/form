@@ -4,6 +4,7 @@ import type {
   BuildFormFieldAccessors,
   FormData,
   FormFieldAccessorOptions,
+  FormHandle,
   FormHooks,
   FormOptions,
   FormSchema,
@@ -334,5 +335,5 @@ export function useFormCore<
         return result
       }
     },
-  } as const
+  } as const satisfies FormHandle & { fields: any; data: any }
 }
