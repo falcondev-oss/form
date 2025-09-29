@@ -29,6 +29,7 @@ export type Form<Schema extends FormSchema> = {
   error: Ref<StandardSchemaV1.FailureResult | undefined>
   sourceValues: Ref<Partial<FormData<Schema>> | undefined>
   isLoading: Ref<boolean>
+  isPending: Ref<boolean>
 }
 
 export class FormField<T, Schema extends FormSchema> {
@@ -198,6 +199,7 @@ export class FormField<T, Schema extends FormSchema> {
       reset: this.#reset.bind(this),
       isChanged: computed(() => !isDeepEqual<unknown>(this.#value.value, this.#sourceValue.value)),
       isDirty: computed(() => this.#updateCount.value !== 0),
+      isPending: form.isPending,
       value: readonly(this.#value) as Ref<NonPrimitiveReadonly<T>>,
       path,
       key: `${path}@${this.#now}`,

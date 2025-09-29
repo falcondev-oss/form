@@ -1,5 +1,5 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
-import type { ComputedRef, Reactive, Ref, UnwrapNestedRefs } from '@vue/reactivity'
+import type { ComputedRef, Reactive, UnwrapNestedRefs } from '@vue/reactivity'
 import type { Hookable, NestedHooks } from 'hookable'
 import type {
   IfUnknown,
@@ -88,6 +88,7 @@ export type FormFieldInternal<T> = {
   handleBlur: () => void
   reset: () => void
   disabled: boolean
+  isPending: boolean
   isDirty: boolean
   isChanged: boolean
   path: string
@@ -112,7 +113,7 @@ export type FormFieldProps<T> = { field: FormField<NullableDeep<T>> }
 export type FormHandle = {
   isChanged: ComputedRef<boolean>
   isDirty: ComputedRef<boolean>
-  isLoading: Readonly<Ref<boolean>>
+  isLoading: ComputedRef<boolean>
   errors: ComputedRef<readonly StandardSchemaV1.Issue[] | undefined>
   submit: () => Promise<unknown>
   reset: () => void

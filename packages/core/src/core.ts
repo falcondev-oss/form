@@ -9,7 +9,7 @@ import type {
   FormOptions,
   FormSchema,
 } from './types'
-import { computed, reactive, readonly, ref, toRef, watch } from '@vue/reactivity'
+import { computed, reactive, ref, toRef, watch } from '@vue/reactivity'
 import { deleteProperty, getProperty, setProperty } from 'dot-prop'
 import { createHooks } from 'hookable'
 import { klona } from 'klona/full'
@@ -45,7 +45,9 @@ export function useFormCore<
 
   const sourceValues = toRef(formOpts.sourceValues) as unknown as Ref<Data | undefined>
   const formUpdateCount = ref(0)
-  const isLoading = ref(false)
+  const isPending = ref(false)
+  const isSubmitting = ref(false)
+  const isLoading = computed(() => isSubmitting.value || isPending.value)
   const disabled = computed(() => isLoading.value)
 
   const formError = ref<StandardSchemaV1.FailureResult>()
@@ -63,7 +65,7 @@ export function useFormCore<
   watch(
     sourceValues,
     () => {
-      isLoading.value = sourceValues.value === undefined
+      isPending.value = sourceValues.value === undefined
     },
     { immediate: true },
   )
@@ -240,6 +242,7 @@ export function useFormCore<
                 error: formError,
                 sourceValues,
                 isLoading,
+                isPending,
               })
 
               Object.defineProperty(field.api, '$', {
@@ -300,19 +303,19 @@ export function useFormCore<
     fields: createFormFieldProxy(),
     isDirty: computed(() => formUpdateCount.value !== 0),
     isChanged: computed(() => !hasSubObject<object, object>(sourceValues.value ?? {}, formData)),
-    isLoading: readonly(isLoading),
+    isLoading,
     data: observedFormData,
     errors: computed(() => formError.value?.issues),
     reset,
     submit: async () => {
       await hooks.callHook('beforeSubmit', { data: observedFormData })
-      isLoading.value = true
+      isSubmitting.value = true
 
       try {
         const validationResult = await validateForm()
 
         if (!validationResult) {
-          isLoading.value = false
+          isSubmitting.value = false
           return { success: false }
         }
 
@@ -321,13 +324,13 @@ export function useFormCore<
 
         if (submitResult.success) formUpdateCount.value = 0
 
-        isLoading.value = false
+        isSubmitting.value = false
         await hooks.callHook('afterSubmit', submitResult)
 
         return submitResult
       } catch (err) {
         console.error(err)
-        isLoading.value = false
+        isSubmitting.value = false
 
         const result = { success: false }
         await hooks.callHook('afterSubmit', result)
