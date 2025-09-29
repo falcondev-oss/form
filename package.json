@@ -30,9 +30,9 @@
   },
   "devDependencies": {
     "@falcondev-oss/configs": "^5.0.2",
-    "eslint": "^9.34.0",
+    "eslint": "^9.36.0",
     "prettier": "^3.6.2",
-    "tsdown": "^0.14.2",
+    "tsdown": "^0.15.5",
     "typescript": "^5.9.2"
   },
   "changelogithub": {

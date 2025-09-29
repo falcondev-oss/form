@@ -7,13 +7,13 @@ import type {
   IsLiteral,
   IsSymbolLiteral,
   IsTuple,
+  IsUnion,
   IsUnknown,
   PickIndexSignature,
   Primitive,
   Simplify,
   Writable,
 } from 'type-fest'
-import type { IsUnion } from 'type-fest/source/internal'
 import type { ZodType } from 'zod/v4'
 
 type ObjectHasFunctionsOrSymbols<T> =
