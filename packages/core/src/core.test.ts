@@ -1,4 +1,5 @@
 import { ref, watch } from '@vue/reactivity'
+import { until } from '@vueuse/core'
 import { describe, expect, expectTypeOf, test, vi } from 'vitest'
 import z from 'zod'
 import { useFormCore } from './core'
@@ -235,21 +236,38 @@ describe('field', () => {
           person: { name: 'John Doe' },
         }
       },
-      async submit() {},
+      async submit() {
+        await sleep(1000)
+        return { success: true }
+      },
     })
 
+    const nameField = form.fields.person.name.$use()
+    expect(nameField.isPending).toBe(true)
     expect(form.isLoading.value).toBe(true)
     expect(form.data.person).toBeUndefined()
-    expect(form.fields.person.name.$use().value).toBeNull()
+    expect(nameField.value).toBeNull()
 
-    form.fields.person.name.$use().handleChange('Jane Doe')
-    expect(form.fields.person.name.$use().value).toBeNull()
+    nameField.handleChange('Input is ignored')
+    expect(nameField.value).toBeNull()
 
     isLoading.value = false
+    expect(nameField.isPending).toBe(false)
     expect(form.isLoading.value).toBe(false)
 
-    expect(form.fields.person.name.$use().value).toBe('John Doe')
+    expect(nameField.value).toBe('John Doe')
     expect(form.data.person?.name).toBe('John Doe')
+
+    const submit = form.submit()
+
+    await until(form.isLoading).toBe(true)
+    expect(form.isLoading.value).toBe(true)
+    expect(nameField.isPending).toBe(false) // pending is only for loading source values
+
+    await submit
+
+    expect(form.isLoading.value).toBe(false)
+    expect(nameField.isPending).toBe(false)
   })
 })
 
