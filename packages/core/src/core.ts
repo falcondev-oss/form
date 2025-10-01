@@ -9,7 +9,7 @@ import type {
   FormOptions,
   FormSchema,
 } from './types'
-import { computed, reactive, ref, toRef, watch } from '@vue/reactivity'
+import { computed, reactive, ref, toValue, watch } from '@vue/reactivity'
 import { deleteProperty, getProperty, setProperty } from 'dot-prop'
 import { createHooks } from 'hookable'
 import { klona } from 'klona/full'
@@ -43,8 +43,11 @@ export function useFormCore<
   const hooks = createHooks<FormHooks<Schema>>()
   if (formOpts.hooks) hooks.addHooks(formOpts.hooks)
 
-  const sourceValues = toRef(formOpts.sourceValues) as unknown as Ref<Data | undefined>
+  const sourceValues = computed(() => toValue(formOpts.sourceValues)) as ComputedRef<
+    Data | undefined
+  >
   const formUpdateCount = ref(0)
+  const isDirty = computed(() => formUpdateCount.value !== 0)
   const isPending = ref(false)
   const isSubmitting = ref(false)
   const isLoading = computed(() => isSubmitting.value || isPending.value)
@@ -55,7 +58,7 @@ export function useFormCore<
   const formData = toReactive(formDataRef) as Partial<Data>
 
   function reset() {
-    // console.debug('useCoolForm: reset()')
+    console.debug('useForm: reset()')
 
     formDataRef.value = clone(sourceValues.value ?? {})
     formUpdateCount.value = 0
@@ -72,7 +75,12 @@ export function useFormCore<
 
   watch(sourceValues, () => {
     // console.debug('sourceValues changed')
-    if (formUpdateCount.value !== 0) {
+    if (isLoading.value) {
+      console.debug('useForm:', 'Skipped sourceValues update while form is loading')
+      return
+    }
+
+    if (isDirty.value) {
       /* TODO: update all untouched fields & show info on outdated fields.
         form.sourceValues + sourceValues.timestamp
 
@@ -82,7 +90,7 @@ export function useFormCore<
       console.warn('useForm:', 'Skipped sourceValues update after form was edited')
       return
     }
-    if (isLoading.value) return
+
     reset()
   })
 
@@ -301,7 +309,7 @@ export function useFormCore<
   return {
     hooks,
     fields: createFormFieldProxy(),
-    isDirty: computed(() => formUpdateCount.value !== 0),
+    isDirty,
     isChanged: computed(() => !hasSubObject<object, object>(sourceValues.value ?? {}, formData)),
     isLoading,
     data: observedFormData,
@@ -322,7 +330,7 @@ export function useFormCore<
         const ctx = { values: validationResult }
         const submitResult = (await formOpts.submit(ctx)) ?? { success: true }
 
-        if (submitResult.success) formUpdateCount.value = 0
+        if (submitResult.success) reset()
 
         isSubmitting.value = false
         await hooks.callHook('afterSubmit', submitResult)

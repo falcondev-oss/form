@@ -177,7 +177,7 @@ export class FormField<T, Schema extends FormSchema> {
             issues: form.error.value.issues.filter((issue) => {
               if (!issue.path) return false
               const issuePath = pathSegmentsToPathString(issue.path)
-              return issuePath === this.#context.value.path
+              return issuePath.startsWith(this.#context.value.path)
             }),
           } satisfies StandardSchemaV1.FailureResult)
         : undefined
