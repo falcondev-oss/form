@@ -19,7 +19,7 @@ import { match, P } from 'ts-pattern'
 import { FormField } from './field'
 import { toReactive } from './reactive'
 import { extend, setContext } from './types'
-import { pathSegmentsToPathString } from './util'
+import { escapePathSegment, pathSegmentsToPathString } from './util'
 
 type ArrayMutationMethod =
   | 'push'
@@ -94,7 +94,9 @@ export function useFormCore<
     reset()
   })
 
-  type FieldCacheMeta = { $field: FormField<unknown, any> }
+  // $field can be undefined if the field was never accessed via $use() directly
+  // e.g. only an array item was accessed -> 'array.$field' is never set
+  type FieldCacheMeta = { $field: FormField<unknown, any> | undefined }
   const fieldCache: Record<string, FieldCacheMeta | undefined> = {}
 
   const fieldsCache = new Map<string, ComputedRef<BuildFormFieldAccessors<any>[]>>()
@@ -105,7 +107,7 @@ export function useFormCore<
       formUpdateCount.value++
 
       const cachedField = getProperty(fieldCache, pathSegmentsToPathString(path), undefined)
-      void cachedField?.$field.validate()
+      void cachedField?.$field?.validate()
     },
     {
       ignoreDetached: true,
@@ -152,7 +154,7 @@ export function useFormCore<
               return
             }
 
-            cachedField.sort((a, b) => compareFn(a?.$field.api.value, b?.$field.api.value))
+            cachedField.sort((a, b) => compareFn(a?.$field?.api.value, b?.$field?.api.value))
             formDataField.sort(compareFn)
           })
           .with({ name: P.union('push') }, () => {}) // noop
@@ -287,7 +289,7 @@ export function useFormCore<
 
         if (prop === '__v_raw') return
 
-        const propPath = path ? `${path}.${prop}` : prop
+        const propPath = path ? `${path}.${escapePathSegment(prop)}` : escapePathSegment(prop)
         return createFormFieldProxy(propPath)
       },
     })

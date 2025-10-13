@@ -16,8 +16,8 @@ export function pathSegmentsToPathString(
     // only add dot if it's not the first element & not an array index
     if (i > 0) path += '.'
 
-    if (typeof p === 'string' || typeof p === 'symbol') path += p.toString()
-    else path += p.key.toString()
+    if (typeof p === 'string' || typeof p === 'symbol') path += escapePathSegment(p.toString())
+    else path += escapePathSegment(p.key.toString())
   }
 
   return path
@@ -25,4 +25,8 @@ export function pathSegmentsToPathString(
 
 export async function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+export function escapePathSegment(segment: string) {
+  return segment.replaceAll('.', String.raw`\.`)
 }

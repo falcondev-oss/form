@@ -1,9 +1,10 @@
 import { ref, watch } from '@vue/reactivity'
 import { until } from '@vueuse/core'
+import { getProperty } from 'dot-prop'
 import { describe, expect, expectTypeOf, test, vi } from 'vitest'
 import z from 'zod'
 import { useFormCore } from './core'
-import { sleep } from './util'
+import { pathSegmentsToPathString, sleep } from './util'
 
 describe('form', () => {
   describe('isChanged', () => {
@@ -268,6 +269,63 @@ describe('field', () => {
 
     expect(form.isLoading.value).toBe(false)
     expect(nameField.isPending).toBe(false)
+  })
+
+  describe('accessor', () => {
+    test('dot in object key', () => {
+      const form = useFormCore({
+        schema: z.object({
+          'foo.bar': z.string(),
+          'foo.bar.array': z.array(z.string()),
+        }),
+        sourceValues: () => ({
+          'foo.bar': null,
+          'foo.bar.array': ['one', 'two'],
+        }),
+        async submit() {},
+      })
+
+      // string
+      const stringField = form.fields['foo.bar'].$use()
+      expect(stringField.value).toBeNull()
+
+      stringField.handleChange('Test')
+
+      expect(stringField.value).toBe('Test')
+      expect(form.data['foo.bar']).toBe('Test')
+      expect(stringField.path).toBe(String.raw`foo\.bar`)
+
+      // array (has special cache handling)
+      const arrayField = form.fields['foo.bar.array'].at(0)!.$use()
+      expect(arrayField.value).toBe('one')
+      expect(form.data['foo.bar.array']?.[0]).toEqual('one')
+
+      form.data['foo.bar.array']?.unshift('zero')
+
+      expect(form.data['foo.bar.array']?.[0]).toEqual('zero')
+      expect(arrayField.value).toBe('zero')
+    })
+
+    test('array value without array itself', () => {
+      const form = useFormCore({
+        schema: z.object({
+          array: z.array(z.string()),
+        }),
+        sourceValues: () => ({
+          array: ['one', 'two'],
+        }),
+        async submit() {},
+      })
+
+      const arrayField = form.fields.array.at(0)!.$use()
+      expect(arrayField.value).toBe('one')
+      expect(form.data.array?.[0]).toEqual('one')
+
+      form.data.array?.unshift('zero')
+
+      expect(form.data.array?.[0]).toEqual('zero')
+      expect(arrayField.value).toBe('zero')
+    })
   })
 })
 
