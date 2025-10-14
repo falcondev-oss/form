@@ -22,10 +22,13 @@
   "publishConfig": {
     "exports": {
       ".": {
+        "types": "./dist/index.d.ts",
         "import": "./dist/index.js",
         "require": "./dist/index.cjs"
       },
+      "./package.json": "./package.json",
       "./reactive": {
+        "types": "./dist/reactive.d.ts",
         "import": "./dist/reactive.js",
         "require": "./dist/reactive.cjs"
       }
