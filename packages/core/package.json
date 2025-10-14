@@ -50,17 +50,17 @@
     "@standard-schema/spec": "^1.0.0",
     "@vue/reactivity": "^3.5.22",
     "@vueuse/core": "^13.9.0",
-    "dot-prop": "^10.0.0",
+    "dot-prop": "^10.1.0",
     "hookable": "^5.5.3",
     "klona": "^2.0.6",
     "on-change": "^6.0.0",
     "remeda": "^2.32.0",
     "ts-pattern": "^5.8.0",
-    "type-fest": "^5.0.1"
+    "type-fest": "^5.1.0"
   },
   "devDependencies": {
-    "typescript": "^5.9.2",
+    "typescript": "^5.9.3",
     "vitest": "^3.2.4",
-    "zod": "^4.1.11"
+    "zod": "^4.1.12"
   }
 }
