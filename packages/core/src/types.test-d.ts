@@ -26,6 +26,7 @@ test('nullableDeep', () => {
       [brand]: 'DateRange'
     }
     objectWithFunctions: {
+      a?: string
       fn: () => void
     }
     array: string[]
@@ -60,6 +61,7 @@ test('nullableDeep', () => {
       [brand]: 'DateRange'
     } | null
     objectWithFunctions: {
+      a?: string
       fn: () => void
     } | null
     array: (string | null)[] | null

@@ -2,9 +2,10 @@ import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type { ComputedRef, Reactive, UnwrapNestedRefs } from '@vue/reactivity'
 import type { Hookable, NestedHooks } from 'hookable'
 import type {
-  IfUnknown,
+  If,
   IsAny,
   IsLiteral,
+  IsNever,
   IsSymbolLiteral,
   IsTuple,
   IsUnion,
@@ -21,7 +22,9 @@ type ObjectHasFunctionsOrSymbols<T> =
     ? false
     : IsUnknown<T[keyof T]> extends true
       ? false
-      : [NonNullable<T>[keyof NonNullable<T>]] extends [(...args: any[]) => any]
+      : IsNever<
+            Extract<NonNullable<T>[keyof NonNullable<T>], (...args: any[]) => any>
+          > extends false
         ? true
         : true extends { [K in keyof T]: IsSymbolLiteral<K> extends true ? true : never }[keyof T]
           ? true
@@ -127,7 +130,7 @@ export type FormFieldTranslator<T, O> = {
 export type FormFieldAccessor<T> = {
   $use: <O>(opts?: {
     translate?: FormFieldTranslator<T, O>
-  }) => NoInfer<FormField<IfUnknown<O, T, O>>>
+  }) => NoInfer<FormField<If<IsUnknown<O>, T, O>>>
 }
 
 type FormFieldDiscriminatorAccessor<T, DiscriminatorKey extends PropertyKey> = {

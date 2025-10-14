@@ -125,5 +125,6 @@ export type {
   FormFieldProps,
   FormFields,
   FormFieldTranslator,
+  FormHandle,
   NullableDeep,
 } from '@falcondev-oss/form-core'

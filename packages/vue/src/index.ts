@@ -52,6 +52,7 @@ export type {
   FormFieldProps,
   FormFields,
   FormFieldTranslator,
+  FormHandle,
   NullableDeep,
 } from '@falcondev-oss/form-core'
 export { refEffect } from '@falcondev-oss/form-core/reactive'
