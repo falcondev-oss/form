@@ -7,7 +7,7 @@ import type {
   FormFieldContext,
   FormFieldInternal,
   FormFieldTranslator,
-  FormHooks,
+  FormHookDefinitions,
   FormOptions,
   FormSchema,
   NonPrimitiveReadonly,
@@ -21,7 +21,7 @@ import { pathSegmentsToPathString } from './util'
 import { getValidatorByPath } from './validator'
 
 export type Form<Schema extends FormSchema> = {
-  hooks: Hookable<FormHooks<Schema>>
+  hooks: Hookable<FormHookDefinitions<Schema>>
   disabled: Ref<boolean>
   updateCount: Ref<number>
   data: Partial<FormData<Schema>>

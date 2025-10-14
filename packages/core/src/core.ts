@@ -5,6 +5,7 @@ import type {
   FormData,
   FormFieldAccessorOptions,
   FormHandle,
+  FormHookDefinitions,
   FormHooks,
   FormOptions,
   FormSchema,
@@ -40,7 +41,7 @@ export function useFormCore<
   const Data extends FormData<Schema> = FormData<Schema>,
 >(formOpts: FormOptions<Schema>) {
   // console.debug('useFormCore()')
-  const hooks = createHooks<FormHooks<Schema>>()
+  const hooks = createHooks<FormHookDefinitions<Schema>>()
   if (formOpts.hooks) hooks.addHooks(formOpts.hooks)
 
   const sourceValues = computed(() => toValue(formOpts.sourceValues)) as ComputedRef<
@@ -309,7 +310,7 @@ export function useFormCore<
   }
 
   return {
-    hooks,
+    hooks: hooks as FormHooks<FormHookDefinitions<Schema>>,
     fields: createFormFieldProxy(),
     isDirty,
     isChanged: computed(() => !hasSubObject<object, object>(sourceValues.value ?? {}, formData)),

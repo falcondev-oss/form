@@ -1,5 +1,5 @@
 import type { FormHandle, FormOptions, FormSchema } from '@falcondev-oss/form-core'
-import type { MaybeRefOrGetter, UnwrapNestedRefs, WritableComputedRef } from 'vue'
+import type { MaybeRefOrGetter, WritableComputedRef } from 'vue'
 import { extend, useFormCore } from '@falcondev-oss/form-core'
 import { computed, toValue } from 'vue'
 
@@ -10,20 +10,36 @@ declare module '@falcondev-oss/form-core' {
 }
 
 export function useFormHandles(forms: MaybeRefOrGetter<FormHandle[]>) {
-  return computed(() => {
-    const forms_ = toValue(forms)
-
-    return {
-      isChanged: forms_.some((f) => f.isChanged.value),
-      isDirty: forms_.some((f) => f.isDirty.value),
-      isLoading: forms_.some((f) => f.isLoading.value),
-      errors: forms_.find((f) => f.errors.value)?.errors.value,
-      submit: async () => Promise.all(forms_.map(async (f) => f.submit())),
-      reset: () => {
-        for (const f of forms_) f.reset()
+  return {
+    isChanged: computed(() => toValue(forms).some((f) => f.isChanged.value)),
+    isDirty: computed(() => toValue(forms).some((f) => f.isDirty.value)),
+    isLoading: computed(() => toValue(forms).some((f) => f.isLoading.value)),
+    errors: computed(() => toValue(forms).find((f) => f.errors.value)?.errors.value),
+    submit: async () => Promise.all(toValue(forms).map(async (f) => f.submit())),
+    reset: () => {
+      for (const f of toValue(forms)) f.reset()
+    },
+    hooks: {
+      addHooks(configHooks) {
+        const unsub = toValue(forms).map((f) => f.hooks.addHooks(configHooks))
+        return () => {
+          for (const u of unsub) u()
+        }
       },
-    } satisfies UnwrapNestedRefs<Omit<FormHandle, 'hooks'>>
-  })
+      hook(name, function_, options) {
+        const unsub = toValue(forms).map((f) => f.hooks.hook(name, function_, options))
+        return () => {
+          for (const u of unsub) u()
+        }
+      },
+      hookOnce(name, function_) {
+        const unsub = toValue(forms).map((f) => f.hooks.hookOnce(name, function_))
+        return () => {
+          for (const u of unsub) u()
+        }
+      },
+    },
+  } satisfies FormHandle
 }
 
 export function useForm<const Schema extends FormSchema>(

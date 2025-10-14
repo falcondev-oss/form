@@ -9,6 +9,7 @@ export {
   type FormFields,
   type FormFieldTranslator,
   type FormHandle,
+  type FormHookDefinitions,
   type FormHooks,
   type FormOptions,
   type FormSchema,

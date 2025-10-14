@@ -44,7 +44,6 @@ export function useForm<const Schema extends FormSchema>(
     const form = useFormCore({
       ...opts,
       submit: async (...args) => submitFnRef.value(...args),
-
       sourceValues: () => sourceValuesRef.value,
       [extend]: {
         setup: () => {

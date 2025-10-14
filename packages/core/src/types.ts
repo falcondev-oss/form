@@ -61,14 +61,18 @@ export interface FormOptions<
   schema: Schema
   sourceValues: MaybeGetter<Writable<FormData<Schema>> | undefined>
   submit: (ctx: { values: Output }) => Promise<void | { success: boolean }>
-  hooks?: NestedHooks<FormHooks<Schema>>
+  hooks?: NestedHooks<FormHookDefinitions<Schema>>
   [extend]?: {
     setup?: <T>(field: FormFieldInternal<T>) => FormFieldExtend<T>
     $use?: <T>(field: FormFieldInternal<T>) => FormFieldExtend<T>
   }
 }
 
-export interface FormHooks<Schema extends FormSchema> {
+export type FormHooks<T extends Record<string, any>> = Pick<
+  Hookable<T>,
+  'hook' | 'hookOnce' | 'addHooks'
+>
+export interface FormHookDefinitions<Schema extends FormSchema> {
   beforeSubmit: (form: { data: Partial<FormData<Schema>> }) => Promise<void> | void
   afterSubmit: (result: { success: boolean }) => Promise<void> | void
   // beforeReset: () => Promise<void> | void
@@ -120,7 +124,7 @@ export type FormHandle = {
   errors: ComputedRef<readonly StandardSchemaV1.Issue[] | undefined>
   submit: () => Promise<unknown>
   reset: () => void
-  hooks: Hookable<FormHooks<FormSchema>>
+  hooks: FormHooks<FormHookDefinitions<FormSchema>>
 }
 
 export type FormFieldTranslator<T, O> = {
