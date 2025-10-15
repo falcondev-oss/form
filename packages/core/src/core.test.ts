@@ -1,10 +1,9 @@
 import { ref, watch } from '@vue/reactivity'
 import { until } from '@vueuse/core'
-import { getProperty } from 'dot-prop'
 import { describe, expect, expectTypeOf, test, vi } from 'vitest'
 import z from 'zod'
 import { useFormCore } from './core'
-import { pathSegmentsToPathString, sleep } from './util'
+import { sleep } from './util'
 
 describe('form', () => {
   describe('isChanged', () => {
