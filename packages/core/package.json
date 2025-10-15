@@ -20,17 +20,28 @@
     "./reactive": "./src/reactive.ts"
   },
   "publishConfig": {
+    "types": "./dist/index.d.ts",
     "exports": {
       ".": {
-        "types": "./dist/index.d.ts",
-        "import": "./dist/index.js",
-        "require": "./dist/index.cjs"
+        "import": {
+          "types": "./dist/index.d.ts",
+          "default": "./dist/index.js"
+        },
+        "require": {
+          "types": "./dist/index.d.cts",
+          "default": "./dist/index.cjs"
+        }
       },
       "./package.json": "./package.json",
       "./reactive": {
-        "types": "./dist/reactive.d.ts",
-        "import": "./dist/reactive.js",
-        "require": "./dist/reactive.cjs"
+        "import": {
+          "types": "./dist/reactive.d.ts",
+          "default": "./dist/reactive.js"
+        },
+        "require": {
+          "types": "./dist/reactive.d.cts",
+          "default": "./dist/reactive.cjs"
+        }
       }
     }
   },
