@@ -15,7 +15,7 @@ import { deleteProperty, getProperty, setProperty } from 'dot-prop'
 import { createHooks } from 'hookable'
 import { klona } from 'klona/full'
 import onChange from 'on-change'
-import { hasSubObject, isArray } from 'remeda'
+import { hasAtLeast, hasSubObject, isArray } from 'remeda'
 import { match, P } from 'ts-pattern'
 import { FormField } from './field'
 import { toReactive } from './reactive'
@@ -316,7 +316,11 @@ export function useFormCore<
     isChanged: computed(() => !hasSubObject<object, object>(sourceValues.value ?? {}, formData)),
     isLoading,
     data: observedFormData,
-    errors: computed(() => formError.value?.issues),
+    errors: computed(() =>
+      formError.value?.issues && hasAtLeast(formError.value.issues, 1)
+        ? formError.value.issues
+        : undefined,
+    ),
     reset,
     submit: async () => {
       await hooks.callHook('beforeSubmit', { data: observedFormData })

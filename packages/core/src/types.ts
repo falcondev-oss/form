@@ -121,7 +121,7 @@ export type FormHandle = {
   isChanged: ComputedRef<boolean>
   isDirty: ComputedRef<boolean>
   isLoading: ComputedRef<boolean>
-  errors: ComputedRef<readonly StandardSchemaV1.Issue[] | undefined>
+  errors: ComputedRef<readonly [StandardSchemaV1.Issue, ...StandardSchemaV1.Issue[]] | undefined>
   submit: () => Promise<unknown>
   reset: () => void
   hooks: FormHooks<FormHookDefinitions<FormSchema>>
