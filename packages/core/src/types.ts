@@ -210,7 +210,11 @@ type SharedUnionValueKeys<T, Keys extends keyof T = keyof T> = {
 
 // FormFields can be used to define a nested accessor,
 // so it should not be NonNullable at the root like FormData
-export type FormFields<T> = BuildFormFieldAccessors<NullableDeep<T>, false, true>
+export type FormFields<T, Root extends boolean = false> = BuildFormFieldAccessors<
+  NullableDeep<T>,
+  false,
+  Root
+>
 
 export type BuildFormFieldAccessors<T, StopDiscriminator = false, Root extends boolean = false> = [
   IsAny<T>,
