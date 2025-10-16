@@ -51,7 +51,7 @@ export function useForm<const Schema extends FormSchema>(
       $use: (field) => {
         const model = computed({
           get: () => field.value,
-          set: (v: typeof field.value) => field.handleChange(v),
+          set: (v) => field.handleChange(v),
         })
 
         return { model }

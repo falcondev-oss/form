@@ -10,14 +10,13 @@ import type {
   FormHookDefinitions,
   FormOptions,
   FormSchema,
-  NonPrimitiveReadonly,
 } from './types'
-import { computed, markRaw, reactive, readonly, ref, toRefs, watch } from '@vue/reactivity'
-import { getProperty, setProperty } from 'dot-prop'
+import { computed, markRaw, reactive, ref, shallowReadonly, toRefs, watch } from '@vue/reactivity'
+import { setProperty } from 'dot-prop'
 import { isDeepEqual } from 'remeda'
 import { refEffect } from './reactive'
 import { extend, setContext } from './types'
-import { pathSegmentsToPathString } from './util'
+import { getProperty, pathSegmentsToPathString } from './util'
 import { getValidatorByPath } from './validator'
 
 export type Form<Schema extends FormSchema> = {
@@ -200,7 +199,7 @@ export class FormField<T, Schema extends FormSchema> {
       isChanged: computed(() => !isDeepEqual<unknown>(this.#value.value, this.#sourceValue.value)),
       isDirty: computed(() => this.#updateCount.value !== 0),
       isPending: form.isPending,
-      value: readonly(this.#value) as Ref<NonPrimitiveReadonly<T>>,
+      value: shallowReadonly(this.#value) as Ref<T>,
       path,
       key: `${path}@${this.#now}`,
       validator: validator ? markRaw(validator) : undefined,
@@ -214,7 +213,7 @@ export class FormField<T, Schema extends FormSchema> {
 
     const translatedField = reactive({
       ...toRefs(this.api),
-      value: computed(() => translator.get(this.api.value as TT) as NonPrimitiveReadonly<O>),
+      value: computed(() => translator.get(this.api.value as TT)),
       handleChange: (value: O) => {
         const v = translator.set(value)
         return this.api.handleChange(v)

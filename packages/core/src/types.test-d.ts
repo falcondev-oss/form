@@ -12,7 +12,7 @@ import { useFormCore } from './core'
 
 const brand = Symbol('Brand')
 
-test('nullableDeep', () => {
+test('NullableDeep', () => {
   type Values = {
     keyOptional?: string
     nullable: number | null
@@ -121,8 +121,11 @@ describe('discriminated union', () => {
 
     assertType<
       UnionToTuple<
-        | Readonly<{ type: 'A' | null; a: string | null }>
-        | Readonly<{ type: 'B' | null; b: number | null }>
+        | { type: 'A' | null; a: string | null }
+        | {
+            type: 'B' | null
+            b: number | null
+          }
         | null
       >
     >({} as UnionToTuple<ReturnType<typeof form.fields.union.$use>['value']>)

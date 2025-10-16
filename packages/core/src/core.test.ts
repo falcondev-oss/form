@@ -189,14 +189,14 @@ describe('field', () => {
     expect(unionField.$field.$use().value).toEqual(null)
     if (unionField.type === null) {
       expectTypeOf(unionField.$field.$use().value).toEqualTypeOf<
-        | Readonly<{
+        | {
             type: 'A' | null
             value: string | null
-          }>
-        | Readonly<{
+          }
+        | {
             type: 'B' | null
             value: number | null
-          }>
+          }
         | null
       >()
     }
@@ -204,19 +204,19 @@ describe('field', () => {
 
     expect(unionField.$field.$use().value).toEqual({ type: 'A', value: 'Hello' })
     if (unionField.type === 'A') {
-      expectTypeOf(unionField.$field.$use().value).toEqualTypeOf<Readonly<{
+      expectTypeOf(unionField.$field.$use().value).toEqualTypeOf<{
         type: 'A' | null
         value: string | null
-      }> | null>()
+      } | null>()
     }
 
     form.data.union = { type: 'B', value: 42 }
     expect(unionField.$field.$use().value).toEqual({ type: 'B', value: 42 })
     if (unionField.type === 'B') {
-      expectTypeOf(unionField.$field.$use().value).toEqualTypeOf<Readonly<{
+      expectTypeOf(unionField.$field.$use().value).toEqualTypeOf<{
         type: 'B' | null
         value: number | null
-      }> | null>()
+      } | null>()
     }
   })
 
@@ -325,6 +325,59 @@ describe('field', () => {
       expect(form.data.array?.[0]).toEqual('zero')
       expect(arrayField.value).toBe('zero')
     })
+
+    test('root value', () => {
+      const form = useFormCore({
+        schema: z.object({
+          name: z.string(),
+        }),
+        sourceValues: () => ({
+          name: 'John',
+        }),
+        async submit() {},
+      })
+
+      expect(form.fields.$use().value.name).toEqual('John')
+      expect(form.fields.name.$use().value).toEqual('John')
+    })
+  })
+
+  test('readonly', () => {
+    const form = useFormCore({
+      schema: z.object({
+        a: z.string().optional(),
+        array: z.array(z.string()),
+        obj: z.object({
+          b: z.number(),
+        }),
+      }),
+      sourceValues: {
+        a: 'initial',
+        array: ['one', 'two'],
+        obj: {
+          b: 123,
+        },
+      },
+      async submit() {},
+    })
+
+    const consoleWarnSpy = vi.spyOn(console, 'warn')
+
+    // @ts-expect-error Prevent assignment to readonly property
+    form.fields.$use().value = {}
+    expect(consoleWarnSpy).toHaveBeenLastCalledWith(
+      '[Vue warn] Set operation on key "value" failed: target is readonly.',
+      expect.anything(),
+    )
+
+    form.fields.$use().value.a = 'new value'
+    expect(form.data.a).toBe('new value')
+    form.fields.$use().value.obj!.b = 456
+    expect(form.data.obj!.b).toBe(456)
+
+    // pushing to array is allowed
+    form.fields.array.$use().value?.push('three')
+    expect(form.data.array).toEqual(['one', 'two', 'three'])
   })
 })
 

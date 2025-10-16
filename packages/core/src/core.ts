@@ -173,7 +173,7 @@ export function useFormCore<
 
   function createFormFieldProxy(path = '') {
     // console.debug('createFormFieldProxy():', path)
-    return new Proxy(Object.create(null) as BuildFormFieldAccessors<Data>, {
+    return new Proxy(Object.create(null) as BuildFormFieldAccessors<Data, false, true>, {
       ownKeys() {
         const fieldValue = getProperty(formData, path, undefined)
         // console.debug('ownKeys():', path, fieldValue)

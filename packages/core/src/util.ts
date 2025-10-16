@@ -1,4 +1,5 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
+import { getProperty as getProperty_ } from 'dot-prop'
 
 export function pathSegmentsToPathString(
   issuePath: readonly (PropertyKey | StandardSchemaV1.PathSegment)[],
@@ -30,3 +31,12 @@ export async function sleep(ms: number) {
 export function escapePathSegment(segment: string) {
   return segment.replaceAll('.', String.raw`\.`)
 }
+
+export const getProperty = ((
+  ...args: Parameters<typeof getProperty_>
+): ReturnType<typeof getProperty_> => {
+  // empty path returns the object itself
+  // https://github.com/sindresorhus/dot-prop/issues/123
+  if (args[1].length === 0) return args[0]
+  return getProperty_(...args)
+}) as typeof getProperty_

@@ -11,7 +11,6 @@ import type {
   IsUnion,
   IsUnknown,
   PickIndexSignature,
-  Primitive,
   Simplify,
   Writable,
 } from 'type-fest'
@@ -87,10 +86,15 @@ export interface FormHookDefinitions<Schema extends FormSchema> {
 
 export const setContext = Symbol('setContext')
 
-export type NonPrimitiveReadonly<T> = T extends Primitive ? T : Readonly<T>
+// export type NonPrimitiveReadonly<T> = T extends Primitive
+//   ? T
+//   : T extends Array<infer I>
+//     ? Array<NonPrimitiveReadonly<I>>
+//     : Readonly<T>
+
 export type FormFieldInternal<T> = {
   errors: string[] | undefined
-  value: NonPrimitiveReadonly<T>
+  value: T
   handleChange: (value: T) => void
   handleBlur: () => void
   reset: () => void
@@ -110,7 +114,7 @@ export type FormFieldContext<T> = Parameters<FormFieldInternal<T>[typeof setCont
 export interface FormFieldExtend<T> {}
 
 export interface FormField<T>
-  extends Omit<FormFieldInternal<T>, '$'>,
+  extends Readonly<Omit<FormFieldInternal<T>, '$'>>,
     UnwrapNestedRefs<FormFieldExtend<T>> {
   $: () => BuildFormFieldAccessors<T>
 }
@@ -204,9 +208,13 @@ type SharedUnionValueKeys<T, Keys extends keyof T = keyof T> = {
   [K in Keys as IsDistinctUnionValue<T, K> extends false ? K : never]: true
 }
 
-export type FormFields<T> = BuildFormFieldAccessors<NullableDeep<T>>
+// FormFields can be used to define a nested accessor,
+// so it should not be NonNullable at the root like FormData
+export type FormFields<T> = BuildFormFieldAccessors<NullableDeep<T>, false, true>
 
-export type BuildFormFieldAccessors<T, StopDiscriminator = false> = [IsAny<T>] extends [true]
+export type BuildFormFieldAccessors<T, StopDiscriminator = false, Root extends boolean = false> = [
+  IsAny<T>,
+] extends [true]
   ? FormFieldAccessor<any> | FormFieldDiscriminatorAccessor<any, PropertyKey>
   : [T] extends [(infer TT extends unknown[]) | null]
     ? {
@@ -225,7 +233,7 @@ export type BuildFormFieldAccessors<T, StopDiscriminator = false> = [IsAny<T>] e
         ? FormFieldAccessor<T>
         : GetDiscriminator<NonNullable<T>> extends (StopDiscriminator extends true ? any : never)
           ? // regular object
-            FormFieldAccessor<T> & {
+            FormFieldAccessor<If<Root, Partial<T>, T>> & {
               [K in keyof NonNullable<T>]-?: BuildFormFieldAccessors<NonNullable<T>[K]>
             }
           : // discriminated union object
