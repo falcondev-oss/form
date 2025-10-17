@@ -302,6 +302,15 @@ export function useFormCore<
     }
 
     formError.value = result
+
+    for (const issue of result.issues) {
+      if (!issue.path) continue
+
+      const cachedField = getProperty(fieldCache, pathSegmentsToPathString(issue.path), undefined)
+      if (cachedField) continue
+
+      console.warn('useForm: Detected validation issue in possibly unused field:', issue)
+    }
   }
 
   return {
