@@ -331,7 +331,9 @@ export function useFormCore<
         const ctx = { values: validationResult }
         const submitResult = (await formOpts.submit(ctx)) ?? { success: true }
 
-        if (submitResult.success) reset()
+        // don't reset because we don't want to overwrite the form data with the old sourceValues (updates to sourceValues are handled by the watcher)
+        // only set formUpdateCount to 0 to mark the form as pristine
+        if (submitResult.success) formUpdateCount.value = 0
 
         isSubmitting.value = false
         await hooks.callHook('afterSubmit', submitResult)

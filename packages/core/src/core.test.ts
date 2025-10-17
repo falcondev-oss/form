@@ -116,6 +116,25 @@ describe('form', () => {
       expect(form.data.name).toBe('Jane Smith')
     })
   })
+
+  test('submit', async () => {
+    const form = useFormCore({
+      sourceValues: {
+        name: 'John Doe',
+      },
+      schema: z.object({
+        name: z.string(),
+      }),
+      async submit() {},
+    })
+
+    form.data.name = 'Jane Doe'
+    expect(form.isDirty.value).toBe(true)
+
+    await form.submit()
+    expect(form.isDirty.value).toBe(false)
+    expect(form.data.name).toBe('Jane Doe')
+  })
 })
 
 describe('field', () => {
