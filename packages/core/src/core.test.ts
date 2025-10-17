@@ -112,6 +112,10 @@ describe('form', () => {
         },
       })
 
+      // make form dirty
+      form.data.name = 'Jane Doe'
+      expect(form.data.name).toBe('Jane Doe')
+
       await form.submit()
       expect(form.data.name).toBe('Jane Smith')
     })

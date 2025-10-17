@@ -75,7 +75,8 @@ export function useFormCore<
   )
 
   watch(sourceValues, () => {
-    if (isDirty.value) {
+    // allow updating source values during submit
+    if (isDirty.value && !isSubmitting.value) {
       /* TODO: update all untouched fields & show info on outdated fields.
         form.sourceValues + sourceValues.timestamp
 
