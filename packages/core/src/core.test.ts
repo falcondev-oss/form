@@ -73,6 +73,49 @@ describe('form', () => {
     form.fields.name.$use().handleChange('Isaac Newton')
     expect(spy).toHaveBeenCalledWith('Isaac Newton')
   })
+
+  describe('sourceValues', () => {
+    test('forbid updates when dirty', () => {
+      const sourceValues = ref({
+        name: 'John Doe',
+      })
+      const form = useFormCore({
+        sourceValues: () => sourceValues.value,
+        schema: z.object({
+          name: z.string(),
+        }),
+        async submit() {},
+      })
+
+      form.data.name = 'Jane Doe'
+      expect(form.data.name).toBe('Jane Doe')
+
+      sourceValues.value = {
+        name: 'Alice Johnson',
+      }
+      expect(form.data.name).toBe('Jane Doe')
+    })
+
+    test('allow updates during submit', async () => {
+      const sourceValues = ref({
+        name: 'John Doe',
+      })
+      const form = useFormCore({
+        sourceValues: () => sourceValues.value,
+        schema: z.object({
+          name: z.string(),
+        }),
+        async submit() {
+          sourceValues.value = {
+            name: 'Jane Smith',
+          }
+        },
+      })
+
+      await form.submit()
+      expect(form.data.name).toBe('Jane Smith')
+    })
+  })
 })
 
 describe('field', () => {

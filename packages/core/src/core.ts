@@ -75,12 +75,6 @@ export function useFormCore<
   )
 
   watch(sourceValues, () => {
-    // console.debug('sourceValues changed')
-    if (isLoading.value) {
-      console.debug('useForm:', 'Skipped sourceValues update while form is loading')
-      return
-    }
-
     if (isDirty.value) {
       /* TODO: update all untouched fields & show info on outdated fields.
         form.sourceValues + sourceValues.timestamp
