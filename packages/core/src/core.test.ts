@@ -177,11 +177,13 @@ describe('field', () => {
     await Promise.resolve()
     expect(nestedField.errors).toEqual(['Invalid input: expected string, received null'])
     expect(ageField.errors).toEqual(undefined)
+    expect(form.errors.value?.length).toBeDefined()
 
     form.data.array![0]!.name = 'John'
     await Promise.resolve()
     expect(nestedField.errors).toEqual(undefined)
     expect(ageField.errors).toEqual(undefined)
+    expect(form.errors.value).toBeUndefined()
   })
 
   test('translate', async () => {

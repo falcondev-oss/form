@@ -59,7 +59,7 @@ export class FormField<T, Schema extends FormSchema> {
     )
     if (!formResult.issues) {
       this.#validationError.value = undefined
-      // fieldErrors.reset() // TODO: should be automatically
+      this.#form.error.value = undefined
       return
     }
 
