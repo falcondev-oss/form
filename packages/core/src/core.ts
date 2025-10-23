@@ -36,6 +36,11 @@ function clone<const T>(value: T): T {
   return klona(value)
 }
 
+// $field can be undefined if the field was never accessed via $use() directly
+// e.g. only an array item was accessed -> 'array.$field' is never set
+type FieldCacheItem = { $field: FormField<unknown, any> | undefined }
+export type FieldCache = Record<string, FieldCacheItem | undefined>
+
 export function useFormCore<
   const Schema extends FormSchema,
   const Data extends FormData<Schema> = FormData<Schema>,
@@ -90,12 +95,9 @@ export function useFormCore<
     reset()
   })
 
-  // $field can be undefined if the field was never accessed via $use() directly
-  // e.g. only an array item was accessed -> 'array.$field' is never set
-  type FieldCacheMeta = { $field: FormField<unknown, any> | undefined }
-  const fieldCache: Record<string, FieldCacheMeta | undefined> = {}
+  const fieldCache: FieldCache = {}
 
-  const fieldsCache = new Map<string, ComputedRef<BuildFormFieldAccessors<any>[]>>()
+  const iteratorFieldsCache = new Map<string, ComputedRef<BuildFormFieldAccessors<any>[]>>()
 
   const observedFormData = onChange(
     formData,
@@ -115,7 +117,7 @@ export function useFormCore<
 
         const cachedField = getProperty(fieldCache, pathSegmentsToPathString(path), undefined)
         // @ts-expect-error $fetch is a property on the array object
-        if (!cachedField || !isArray<(FieldCacheMeta | undefined)[]>(cachedField)) return true
+        if (!cachedField || !isArray<(FieldCacheItem | undefined)[]>(cachedField)) return true
 
         // console.debug('observedFormData', { path, value, prevValue, applyData })
 
@@ -186,14 +188,14 @@ export function useFormCore<
           const iteratorPath = `${path}[Symbol.iterator]`
           // console.debug(iteratorPath)
 
-          let fields = fieldsCache.get(iteratorPath)
+          let fields = iteratorFieldsCache.get(iteratorPath)
           if (!fields) {
             const _fields = computed(
               () =>
                 fieldValue.value?.map((_, index) => createFormFieldProxy(`${path}[${index}]`)) ??
                 [],
             )
-            fieldsCache.set(iteratorPath, _fields)
+            iteratorFieldsCache.set(iteratorPath, _fields)
             fields = _fields
           }
 
@@ -248,6 +250,7 @@ export function useFormCore<
                 sourceValues,
                 isLoading,
                 isPending,
+                fieldCache,
               })
 
               Object.defineProperty(field.api, '$', {
@@ -305,7 +308,7 @@ export function useFormCore<
     for (const issue of result.issues) {
       if (!issue.path) continue
 
-      const cachedField = getProperty(fieldCache, pathSegmentsToPathString(issue.path), undefined)
+      const cachedField = getProperty(fieldCache, pathSegmentsToPathString(issue.path))?.$field
       if (cachedField) continue
 
       console.warn('useForm: Detected validation issue in possibly unused field:', issue)

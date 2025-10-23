@@ -2,6 +2,7 @@ import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type { ComputedRef, Ref } from '@vue/reactivity'
 import type { Hookable } from 'hookable'
 import type { ZodType } from 'zod'
+import type { FieldCache } from './core'
 import type {
   FormData,
   FormFieldContext,
@@ -29,6 +30,20 @@ export type Form<Schema extends FormSchema> = {
   sourceValues: Ref<Partial<FormData<Schema>> | undefined>
   isLoading: Ref<boolean>
   isPending: Ref<boolean>
+  fieldCache: FieldCache
+}
+
+function filterFieldIssues(fieldPath: string, fieldCache: FieldCache) {
+  return (issue: StandardSchemaV1.Issue): boolean => {
+    if (!issue.path) return false
+    const issuePath = pathSegmentsToPathString(issue.path)
+
+    // direct field issues
+    if (issuePath === fieldPath) return true
+
+    // only include nested issues for fields are not connected
+    return issuePath.startsWith(fieldPath) && !getProperty(fieldCache, issuePath)?.$field
+  }
 }
 
 export class FormField<T, Schema extends FormSchema> {
@@ -70,11 +85,9 @@ export class FormField<T, Schema extends FormSchema> {
     }
 
     this.#validationError.value = {
-      issues: formResult.issues.filter((issue) => {
-        if (!issue.path) return false
-        const issuePath = pathSegmentsToPathString(issue.path)
-        return issuePath.startsWith(this.#context.value.path)
-      }),
+      issues: formResult.issues.filter(
+        filterFieldIssues(this.#context.value.path, this.#form.fieldCache),
+      ),
     } satisfies StandardSchemaV1.FailureResult
   }
 
@@ -179,11 +192,9 @@ export class FormField<T, Schema extends FormSchema> {
     watch(form.error, () => {
       this.#validationError.value = form.error.value
         ? ({
-            issues: form.error.value.issues.filter((issue) => {
-              if (!issue.path) return false
-              const issuePath = pathSegmentsToPathString(issue.path)
-              return issuePath.startsWith(this.#context.value.path)
-            }),
+            issues: form.error.value.issues.filter(
+              filterFieldIssues(this.#context.value.path, this.#form.fieldCache),
+            ),
           } satisfies StandardSchemaV1.FailureResult)
         : undefined
     })
