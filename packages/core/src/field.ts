@@ -59,7 +59,13 @@ export class FormField<T, Schema extends FormSchema> {
     )
     if (!formResult.issues) {
       this.#validationError.value = undefined
-      this.#form.error.value = undefined
+      this.#form.error.value = this.#form.error.value
+        ? {
+            issues: this.#form.error.value.issues.filter(
+              (i) => !pathSegmentsToPathString(i.path || []).startsWith(this.#context.value.path),
+            ),
+          }
+        : undefined
       return
     }
 
