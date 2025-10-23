@@ -73,14 +73,7 @@ export class FormField<T, Schema extends FormSchema> {
       this.#form.opts.schema['~standard'].validate(this.#form.data),
     )
     if (!formResult.issues) {
-      this.#validationError.value = undefined
-      this.#form.error.value = this.#form.error.value
-        ? {
-            issues: this.#form.error.value.issues.filter(
-              (i) => !pathSegmentsToPathString(i.path || []).startsWith(this.#context.value.path),
-            ),
-          }
-        : undefined
+      this.#form.error.value = undefined
       return
     }
 
