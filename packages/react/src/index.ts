@@ -1,4 +1,5 @@
 import type {
+  FormField,
   FormFieldExtend,
   FormFieldProps,
   FormOptions,
@@ -102,6 +103,18 @@ export function useForm<const Schema extends FormSchema>(
   }, [])
 
   return form
+}
+
+export function useField<T>(field: FormField<T>) {
+  const setTick = useState(0)[1]
+  useEffect(() => {
+    const watcher = watch(field, () => {
+      setTick(Date.now())
+    })
+    return watcher.stop
+  }, [field])
+
+  return field
 }
 
 export function FormFieldMemo<T, P extends object>(
