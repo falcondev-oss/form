@@ -24,10 +24,10 @@ export type Form<Schema extends FormSchema> = {
   hooks: Hookable<FormHookDefinitions<Schema>>
   disabled: Ref<boolean>
   updateCount: Ref<number>
-  data: Partial<FormData<Schema>>
+  data: FormData<Schema>
   opts: FormOptions<Schema>
   error: Ref<StandardSchemaV1.FailureResult | undefined>
-  sourceValues: Ref<Partial<FormData<Schema>> | undefined>
+  sourceValues: Ref<FormData<Schema> | undefined>
   isLoading: Ref<boolean>
   isPending: Ref<boolean>
   fieldCache: FieldCache

@@ -35,7 +35,7 @@ describe('react', () => {
     expect(previousTick).toBeLessThan(currentTick)
 
     expect(form.current.fields.name.$use().model.value).toEqual('Jane Doe')
-    expect(form.current.data.name).toEqual('Jane Doe')
+    expect(form.current.data?.name).toEqual('Jane Doe')
   })
 
   test('useField', async () => {

@@ -1,7 +1,7 @@
 import type { FormHandle, FormOptions, FormSchema } from '@falcondev-oss/form-core'
 import type { MaybeRefOrGetter, WritableComputedRef } from 'vue'
 import { extend, useFormCore } from '@falcondev-oss/form-core'
-import { computed, toValue } from 'vue'
+import { computed, reactive, toValue } from 'vue'
 
 declare module '@falcondev-oss/form-core' {
   interface FormFieldExtend<T> {
@@ -10,11 +10,11 @@ declare module '@falcondev-oss/form-core' {
 }
 
 export function useFormHandles(forms: MaybeRefOrGetter<FormHandle[]>) {
-  return {
-    isChanged: computed(() => toValue(forms).some((f) => f.isChanged.value)),
-    isDirty: computed(() => toValue(forms).some((f) => f.isDirty.value)),
-    isLoading: computed(() => toValue(forms).some((f) => f.isLoading.value)),
-    errors: computed(() => toValue(forms).find((f) => f.errors.value)?.errors.value),
+  const handle = reactive({
+    isChanged: computed(() => toValue(forms).some((f) => f.isChanged)),
+    isDirty: computed(() => toValue(forms).some((f) => f.isDirty)),
+    isLoading: computed(() => toValue(forms).some((f) => f.isLoading)),
+    errors: computed(() => toValue(forms).find((f) => f.errors)?.errors),
     submit: async () => Promise.all(toValue(forms).map(async (f) => f.submit())),
     reset: () => {
       for (const f of toValue(forms)) f.reset()
@@ -38,8 +38,10 @@ export function useFormHandles(forms: MaybeRefOrGetter<FormHandle[]>) {
           for (const u of unsub) u()
         }
       },
-    },
-  } satisfies FormHandle
+    } satisfies FormHandle['hooks'],
+  })
+
+  return handle satisfies FormHandle
 }
 
 export function useForm<const Schema extends FormSchema>(

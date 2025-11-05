@@ -10,7 +10,7 @@ import type {
   FormOptions,
   FormSchema,
 } from './types'
-import { computed, reactive, ref, toValue, watch } from '@vue/reactivity'
+import { computed, markRaw, reactive, ref, toValue, watch } from '@vue/reactivity'
 import { deleteProperty, getProperty, setProperty } from 'dot-prop'
 import { createHooks } from 'hookable'
 import { klona } from 'klona/full'
@@ -60,13 +60,13 @@ export function useFormCore<
   const disabled = computed(() => isLoading.value)
 
   const formError = ref<StandardSchemaV1.FailureResult>()
-  const formDataRef = ref(clone(sourceValues.value ?? {})) as Ref<Partial<Data>>
-  const formData = toReactive(formDataRef) as Partial<Data>
+  const formDataRef = ref(clone(sourceValues.value ?? {})) as Ref<Data>
+  const formData = toReactive(formDataRef) as Data
 
   function reset() {
     console.debug('useForm: reset()')
 
-    formDataRef.value = clone(sourceValues.value ?? {})
+    formDataRef.value = clone(sourceValues.value ?? ({} as Data))
     formUpdateCount.value = 0
     formError.value = undefined
   }
@@ -315,13 +315,13 @@ export function useFormCore<
     }
   }
 
-  return {
-    hooks: hooks as FormHooks<FormHookDefinitions<Schema>>,
-    fields: createFormFieldProxy(),
+  const formApi = reactive({
+    hooks: markRaw(hooks as FormHooks<FormHookDefinitions<Schema>>),
+    fields: markRaw({} as BuildFormFieldAccessors<Data, false, true>),
     isDirty,
     isChanged: computed(() => !hasSubObject<object, object>(sourceValues.value ?? {}, formData)),
     isLoading,
-    data: observedFormData,
+    data: computed(() => (isPending.value ? undefined : observedFormData)),
     errors: computed(() =>
       formError.value?.issues && hasAtLeast(formError.value.issues, 1)
         ? formError.value.issues
@@ -361,5 +361,10 @@ export function useFormCore<
         return result
       }
     },
-  } as const satisfies FormHandle & { fields: any; data: any }
+  })
+
+  // @ts-expect-error assign fields proxy to raw prop
+  formApi.fields = createFormFieldProxy()
+
+  return formApi satisfies FormHandle & { fields: any; data: any }
 }

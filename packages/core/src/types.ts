@@ -72,7 +72,7 @@ export type FormHooks<T extends Record<string, any>> = Pick<
   'hook' | 'hookOnce' | 'addHooks'
 >
 export interface FormHookDefinitions<Schema extends FormSchema> {
-  beforeSubmit: (form: { data: Partial<FormData<Schema>> }) => Promise<void> | void
+  beforeSubmit: (form: { data: FormData<Schema> }) => Promise<void> | void
   afterSubmit: (result: { success: boolean }) => Promise<void> | void
   // beforeReset: () => Promise<void> | void
   // afterReset: () => Promise<void> | void
@@ -122,10 +122,10 @@ export interface FormField<T>
 export type FormFieldProps<T> = { field: FormField<NullableDeep<T>> }
 
 export type FormHandle = {
-  isChanged: ComputedRef<boolean>
-  isDirty: ComputedRef<boolean>
-  isLoading: ComputedRef<boolean>
-  errors: ComputedRef<readonly [StandardSchemaV1.Issue, ...StandardSchemaV1.Issue[]] | undefined>
+  isChanged: boolean
+  isDirty: boolean
+  isLoading: boolean
+  errors: readonly [StandardSchemaV1.Issue, ...StandardSchemaV1.Issue[]] | undefined
   submit: () => Promise<unknown>
   reset: () => void
   hooks: FormHooks<FormHookDefinitions<FormSchema>>
@@ -216,7 +216,7 @@ export type FormFields<T, Root extends boolean = false> = BuildFormFieldAccessor
   Root
 >
 
-export type BuildFormFieldAccessors<T, StopDiscriminator = false, Root extends boolean = false> = [
+export type BuildFormFieldAccessors<T, StopDiscriminator = false, _Root extends boolean = false> = [
   IsAny<T>,
 ] extends [true]
   ? FormFieldAccessor<any> | FormFieldDiscriminatorAccessor<any, PropertyKey>
@@ -237,7 +237,7 @@ export type BuildFormFieldAccessors<T, StopDiscriminator = false, Root extends b
         ? FormFieldAccessor<T>
         : GetDiscriminator<NonNullable<T>> extends (StopDiscriminator extends true ? any : never)
           ? // regular object
-            FormFieldAccessor<If<Root, Partial<T>, T>> & {
+            FormFieldAccessor<T> & {
               [K in keyof NonNullable<T>]-?: BuildFormFieldAccessors<NonNullable<T>[K]>
             }
           : // discriminated union object

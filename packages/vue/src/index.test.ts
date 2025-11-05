@@ -20,7 +20,7 @@ describe('vue', () => {
     expect(form.fields.name.$use().model).toEqual('John Doe')
     form.fields.name.$use().model = 'Jane Doe'
     expect(form.fields.name.$use().model).toEqual('Jane Doe')
-    expect(form.data.name).toEqual('Jane Doe')
+    expect(form.data?.name).toEqual('Jane Doe')
 
     const field = form.fields.birthday.$use({
       translate: {
@@ -39,7 +39,7 @@ describe('vue', () => {
     expect(valueWatcher).toHaveBeenCalledOnce()
     expect(modelWatcher).toHaveBeenCalledOnce()
 
-    expect(form.data.birthday).toEqual('2002-01-01')
+    expect(form.data?.birthday).toEqual('2002-01-01')
     expect(field.value).toEqual(new Date('2002-01-01'))
     expect(field.model).toEqual(new Date('2002-01-01'))
   })
