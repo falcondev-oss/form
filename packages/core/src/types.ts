@@ -53,12 +53,15 @@ export const extend = Symbol('extend')
 
 type MaybeGetter<T extends object | undefined> = T | (() => T)
 
+export type FormSourceValues<S extends FormSchema> = Writable<FormData<S>> | undefined
+
 export interface FormOptions<
   Schema extends FormSchema,
+  SourceValues extends FormSourceValues<Schema>,
   Output extends StandardSchemaV1.InferOutput<Schema> = StandardSchemaV1.InferOutput<Schema>,
 > {
   schema: Schema
-  sourceValues: MaybeGetter<Writable<FormData<Schema>> | undefined>
+  sourceValues: MaybeGetter<SourceValues>
   submit: (ctx: { values: Output }) => Promise<void | { success: boolean }>
   hooks?: NestedHooks<FormHookDefinitions<Schema>>
   [extend]?: {

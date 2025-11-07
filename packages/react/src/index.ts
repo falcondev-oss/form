@@ -4,6 +4,7 @@ import type {
   FormFieldProps,
   FormOptions,
   FormSchema,
+  FormSourceValues,
 } from '@falcondev-oss/form-core'
 import type { ComputedRef } from '@vue/reactivity'
 import type { FunctionComponent, NamedExoticComponent } from 'react'
@@ -29,9 +30,10 @@ declare module '@falcondev-oss/form-core' {
   }
 }
 
-export function useForm<const Schema extends FormSchema>(
-  opts: FormOptions<Schema>,
-): ReturnType<typeof useFormCore<Schema>> {
+export function useForm<
+  const Schema extends FormSchema,
+  SourceValues extends FormSourceValues<Schema>,
+>(opts: FormOptions<Schema, SourceValues>): ReturnType<typeof useFormCore<Schema, SourceValues>> {
   const setTick = useState(0)[1]
 
   const { form, sourceValuesRef, submitFnRef } = useMemo(() => {

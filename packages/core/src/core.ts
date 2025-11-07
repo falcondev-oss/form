@@ -1,5 +1,6 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type { ComputedRef, Ref } from '@vue/reactivity'
+import type { Writable } from 'type-fest'
 import type {
   BuildFormFieldAccessors,
   FormData,
@@ -43,8 +44,9 @@ export type FieldCache = Record<string, FieldCacheItem | undefined>
 
 export function useFormCore<
   const Schema extends FormSchema,
+  SourceValues extends Writable<FormData<Schema>> | undefined,
   const Data extends FormData<Schema> = FormData<Schema>,
->(formOpts: FormOptions<Schema>) {
+>(formOpts: FormOptions<Schema, SourceValues>) {
   // console.debug('useFormCore()')
   const hooks = createHooks<FormHookDefinitions<Schema>>()
   if (formOpts.hooks) hooks.addHooks(formOpts.hooks)
@@ -321,7 +323,12 @@ export function useFormCore<
     isDirty,
     isChanged: computed(() => !hasSubObject<object, object>(sourceValues.value ?? {}, formData)),
     isLoading,
-    data: computed(() => (isPending.value ? undefined : observedFormData)),
+    data: computed(
+      () =>
+        (isPending.value ? undefined : observedFormData) as SourceValues extends undefined
+          ? Data | undefined
+          : Data,
+    ),
     errors: computed(() =>
       formError.value?.issues && hasAtLeast(formError.value.issues, 1)
         ? formError.value.issues

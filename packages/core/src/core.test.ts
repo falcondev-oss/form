@@ -18,12 +18,12 @@ describe('form', () => {
         async submit() {},
       })
 
-      expect(form.data?.name).toBe('')
+      expect(form.data.name).toBe('')
       expect(form.isChanged).toBe(false)
 
       form.fields.name.$use().handleChange('Jane Doe')
 
-      expect(form.data?.name).toBe('Jane Doe')
+      expect(form.data.name).toBe('Jane Doe')
       expect(form.isChanged).toBe(true)
     })
 
@@ -40,12 +40,12 @@ describe('form', () => {
         async submit() {},
       })
 
-      expect(form.data?.name).toBe('John Doe')
+      expect(form.data.name).toBe('John Doe')
       expect(form.isChanged).toBe(false)
 
       form.fields.name.$use().handleChange('Jane Doe')
 
-      expect(form.data?.name).toBe('Jane Doe')
+      expect(form.data.name).toBe('Jane Doe')
       expect(form.isChanged).toBe(true)
     })
   })
@@ -61,12 +61,12 @@ describe('form', () => {
       async submit() {},
     })
 
-    expect(form.data?.name).toBe('John Doe')
+    expect(form.data.name).toBe('John Doe')
 
     const spy = vi.fn()
 
     watch(
-      () => form.data?.name,
+      () => form.data.name,
       (value) => void spy(value),
     )
 
@@ -87,15 +87,13 @@ describe('form', () => {
         async submit() {},
       })
 
-      if (form.data) {
-        form.data.name = 'Jane Doe'
-      }
-      expect(form.data?.name).toBe('Jane Doe')
+      form.data.name = 'Jane Doe'
+      expect(form.data.name).toBe('Jane Doe')
 
       sourceValues.value = {
         name: 'Alice Johnson',
       }
-      expect(form.data?.name).toBe('Jane Doe')
+      expect(form.data.name).toBe('Jane Doe')
     })
 
     test('allow updates during submit', async () => {
@@ -115,11 +113,11 @@ describe('form', () => {
       })
 
       // make form dirty
-      if (form.data) form.data.name = 'Jane Doe'
-      expect(form.data?.name).toBe('Jane Doe')
+      form.data.name = 'Jane Doe'
+      expect(form.data.name).toBe('Jane Doe')
 
       await form.submit()
-      expect(form.data?.name).toBe('Jane Smith')
+      expect(form.data.name).toBe('Jane Smith')
     })
   })
 
@@ -134,12 +132,12 @@ describe('form', () => {
       async submit() {},
     })
 
-    if (form.data) form.data.name = 'Jane Doe'
+    form.data.name = 'Jane Doe'
     expect(form.isDirty).toBe(true)
 
     await form.submit()
     expect(form.isDirty).toBe(false)
-    expect(form.data?.name).toBe('Jane Doe')
+    expect(form.data.name).toBe('Jane Doe')
   })
 })
 
@@ -181,7 +179,7 @@ describe('field', () => {
     expect(ageField.errors).toEqual(undefined)
     expect(form.errors?.length).toBeDefined()
 
-    if (form.data) form.data.array![0]!.name = 'John'
+    form.data.array![0]!.name = 'John'
     await Promise.resolve()
     expect(nestedField.errors).toEqual(undefined)
     expect(ageField.errors).toEqual(undefined)
@@ -215,14 +213,14 @@ describe('field', () => {
 
     expect(fieldT.value).toEqual(now)
     expect(field.value).toBe(now.toISOString())
-    expect(form.data?.date).toBe(now.toISOString())
+    expect(form.data.date).toBe(now.toISOString())
 
     now = new Date(+now + 1)
     field.handleChange(now.toISOString())
 
     expect(fieldT.value).toEqual(now)
     expect(field.value).toBe(now.toISOString())
-    expect(form.data?.date).toBe(now.toISOString())
+    expect(form.data.date).toBe(now.toISOString())
   })
 
   test('discriminator', async () => {
@@ -361,17 +359,17 @@ describe('field', () => {
       stringField.handleChange('Test')
 
       expect(stringField.value).toBe('Test')
-      expect(form.data?.['foo.bar']).toBe('Test')
+      expect(form.data['foo.bar']).toBe('Test')
       expect(stringField.path).toBe(String.raw`foo\.bar`)
 
       // array (has special cache handling)
       const arrayField = form.fields['foo.bar.array'].at(0)!.$use()
       expect(arrayField.value).toBe('one')
-      expect(form.data?.['foo.bar.array']?.[0]).toEqual('one')
+      expect(form.data['foo.bar.array']?.[0]).toEqual('one')
 
-      form.data?.['foo.bar.array']?.unshift('zero')
+      form.data['foo.bar.array']?.unshift('zero')
 
-      expect(form.data?.['foo.bar.array']?.[0]).toEqual('zero')
+      expect(form.data['foo.bar.array']?.[0]).toEqual('zero')
       expect(arrayField.value).toBe('zero')
     })
 
@@ -388,11 +386,11 @@ describe('field', () => {
 
       const arrayField = form.fields.array.at(0)!.$use()
       expect(arrayField.value).toBe('one')
-      expect(form.data?.array?.[0]).toEqual('one')
+      expect(form.data.array?.[0]).toEqual('one')
 
-      form.data?.array?.unshift('zero')
+      form.data.array?.unshift('zero')
 
-      expect(form.data?.array?.[0]).toEqual('zero')
+      expect(form.data.array?.[0]).toEqual('zero')
       expect(arrayField.value).toBe('zero')
     })
 
@@ -441,13 +439,13 @@ describe('field', () => {
     )
 
     form.fields.$use().value.a = 'new value'
-    expect(form.data?.a).toBe('new value')
+    expect(form.data.a).toBe('new value')
     form.fields.$use().value.obj!.b = 456
-    expect(form.data?.obj?.b).toBe(456)
+    expect(form.data.obj?.b).toBe(456)
 
     // pushing to array is allowed
     form.fields.array.$use().value?.push('three')
-    expect(form.data?.array).toEqual(['one', 'two', 'three'])
+    expect(form.data.array).toEqual(['one', 'two', 'three'])
   })
 })
 
@@ -500,11 +498,11 @@ describe('hooks', () => {
   //   })
 
   //   form.fields.name.$use().handleChange('Jane')
-  //   expect(form.data?.name).toBe('Jane')
+  //   expect(form.data.name).toBe('Jane')
 
   //   form.reset()
 
-  //   expect(form.data?.name).toBe('John')
+  //   expect(form.data.name).toBe('John')
   //   expect(beforeResetSpy).toHaveBeenCalled()
   //   expect(afterResetSpy).toHaveBeenCalled()
   //   expect(beforeResetSpy).toHaveBeenCalledBefore(afterResetSpy)

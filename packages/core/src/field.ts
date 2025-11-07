@@ -11,6 +11,7 @@ import type {
   FormHookDefinitions,
   FormOptions,
   FormSchema,
+  FormSourceValues,
 } from './types'
 import { computed, markRaw, reactive, ref, shallowReadonly, toRefs, watch } from '@vue/reactivity'
 import { setProperty } from 'dot-prop'
@@ -25,7 +26,7 @@ export type Form<Schema extends FormSchema> = {
   disabled: Ref<boolean>
   updateCount: Ref<number>
   data: FormData<Schema>
-  opts: FormOptions<Schema>
+  opts: FormOptions<Schema, FormSourceValues<Schema>>
   error: Ref<StandardSchemaV1.FailureResult | undefined>
   sourceValues: Ref<FormData<Schema> | undefined>
   isLoading: Ref<boolean>

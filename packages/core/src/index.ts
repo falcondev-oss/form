@@ -13,5 +13,6 @@ export {
   type FormHooks,
   type FormOptions,
   type FormSchema,
+  type FormSourceValues,
   type NullableDeep,
 } from './types'

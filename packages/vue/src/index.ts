@@ -1,4 +1,9 @@
-import type { FormHandle, FormOptions, FormSchema } from '@falcondev-oss/form-core'
+import type {
+  FormHandle,
+  FormOptions,
+  FormSchema,
+  FormSourceValues,
+} from '@falcondev-oss/form-core'
 import type { MaybeRefOrGetter, WritableComputedRef } from 'vue'
 import { extend, useFormCore } from '@falcondev-oss/form-core'
 import { computed, reactive, toValue } from 'vue'
@@ -44,9 +49,12 @@ export function useFormHandles(forms: MaybeRefOrGetter<FormHandle[]>) {
   return handle satisfies FormHandle
 }
 
-export function useForm<const Schema extends FormSchema>(
-  opts: FormOptions<Schema>,
-): ReturnType<typeof useFormCore<Schema>> & { _v: 'new' } {
+export function useForm<
+  const Schema extends FormSchema,
+  SourceValues extends FormSourceValues<Schema>,
+>(
+  opts: FormOptions<Schema, SourceValues>,
+): ReturnType<typeof useFormCore<Schema, SourceValues>> & { _v: 'new' } {
   const form = useFormCore({
     ...opts,
     [extend]: {
