@@ -52,7 +52,7 @@
   },
   "dependencies": {
     "@falcondev-oss/form-core": "workspace:*",
-    "@vue/reactivity": "^3.5.22"
+    "@vue/reactivity": "^3.5.24"
   },
   "devDependencies": {
     "@testing-library/react-hooks": "^8.0.1",

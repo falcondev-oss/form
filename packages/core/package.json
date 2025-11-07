@@ -62,7 +62,7 @@
   },
   "dependencies": {
     "@standard-schema/spec": "^1.0.0",
-    "@vue/reactivity": "^3.5.22",
+    "@vue/reactivity": "^3.5.24",
     "@vueuse/core": "^13.9.0",
     "dot-prop": "^10.1.0",
     "hookable": "^5.5.3",
