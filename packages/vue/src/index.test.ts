@@ -1,9 +1,33 @@
 import { describe, expect, test, vi } from 'vitest'
-import { watch } from 'vue'
+import { isReactive, watch } from 'vue'
 import z from 'zod'
 import { useForm } from '.'
 
 describe('vue', () => {
+  test('reactivity', () => {
+    const form = useForm({
+      schema: z.object({
+        name: z.string(),
+      }),
+      sourceValues: {
+        name: 'John Doe',
+      },
+      async submit() {},
+    })
+
+    expect(isReactive(form)).toBe(true)
+
+    const dataWatcher = vi.fn()
+    watch(() => form.data.name, dataWatcher, { flush: 'sync' })
+    const isChangedWatcher = vi.fn()
+    watch(() => form.isChanged, isChangedWatcher, { flush: 'sync' })
+
+    form.data.name = 'Jane Doe'
+
+    expect(dataWatcher).toHaveBeenCalledOnce()
+    expect(isChangedWatcher).toHaveBeenCalledOnce()
+  })
+
   test('model', () => {
     const form = useForm({
       schema: z.object({

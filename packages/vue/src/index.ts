@@ -70,7 +70,7 @@ export function useForm<
   })
 
   // TODO: remove _v type flag
-  return { ...form, _v: 'new' as const }
+  return Object.assign(form, { _v: 'new' } as const)
 }
 
 export type {
