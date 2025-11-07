@@ -32,7 +32,7 @@ declare module '@falcondev-oss/form-core' {
 
 export function useForm<
   const Schema extends FormSchema,
-  SourceValues extends FormSourceValues<Schema>,
+  SourceValues extends FormSourceValues<Schema> = FormSourceValues<Schema>,
 >(opts: FormOptions<Schema, SourceValues>): ReturnType<typeof useFormCore<Schema, SourceValues>> {
   const setTick = useState(0)[1]
 
@@ -98,10 +98,13 @@ export function useForm<
   useEffect(() => {
     // console.debug('useForm().useEffect', form.data)
 
-    watch([form.errors, form.isLoading, form.isChanged, form.isDirty], () => {
-      // console.debug('useForm().watch -> rerender', { isLoading: form.isLoading.value })
-      setTick(Date.now())
-    })
+    watch(
+      () => [form.errors, form.isLoading, form.isChanged, form.isDirty],
+      () => {
+        // console.debug('useForm().watch -> rerender', { isLoading: form.isLoading })
+        setTick(Date.now())
+      },
+    )
   }, [])
 
   return form

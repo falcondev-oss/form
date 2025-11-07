@@ -51,7 +51,7 @@ export function useFormHandles(forms: MaybeRefOrGetter<FormHandle[]>) {
 
 export function useForm<
   const Schema extends FormSchema,
-  SourceValues extends FormSourceValues<Schema>,
+  SourceValues extends FormSourceValues<Schema> = FormSourceValues<Schema>,
 >(
   opts: FormOptions<Schema, SourceValues>,
 ): ReturnType<typeof useFormCore<Schema, SourceValues>> & { _v: 'new' } {

@@ -10,6 +10,7 @@ import type {
   FormHooks,
   FormOptions,
   FormSchema,
+  FormSourceValues,
 } from './types'
 import { computed, markRaw, reactive, ref, toValue, watch } from '@vue/reactivity'
 import { deleteProperty, getProperty, setProperty } from 'dot-prop'
@@ -44,7 +45,7 @@ export type FieldCache = Record<string, FieldCacheItem | undefined>
 
 export function useFormCore<
   const Schema extends FormSchema,
-  SourceValues extends Writable<FormData<Schema>> | undefined,
+  SourceValues extends FormSourceValues<Schema> = FormSourceValues<Schema>,
   const Data extends FormData<Schema> = FormData<Schema>,
 >(formOpts: FormOptions<Schema, SourceValues>) {
   // console.debug('useFormCore()')

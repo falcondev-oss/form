@@ -57,7 +57,7 @@ export type FormSourceValues<S extends FormSchema> = Writable<FormData<S>> | und
 
 export interface FormOptions<
   Schema extends FormSchema,
-  SourceValues extends FormSourceValues<Schema>,
+  SourceValues extends FormSourceValues<Schema> = FormSourceValues<Schema>,
   Output extends StandardSchemaV1.InferOutput<Schema> = StandardSchemaV1.InferOutput<Schema>,
 > {
   schema: Schema
