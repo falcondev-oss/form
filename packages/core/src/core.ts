@@ -1,6 +1,5 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type { ComputedRef, Ref } from '@vue/reactivity'
-import type { Writable } from 'type-fest'
 import type {
   BuildFormFieldAccessors,
   FormData,
