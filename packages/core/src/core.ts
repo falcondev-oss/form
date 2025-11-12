@@ -230,6 +230,7 @@ export function useFormCore<
 
             const index = keyPath.match(/\[(\d+)\]$/)?.[1]
             fieldValue.splice(Number(index), 1)
+            deleteProperty(fieldCache, keyPath)
           }
         }
 
