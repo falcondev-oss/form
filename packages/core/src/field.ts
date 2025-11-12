@@ -62,7 +62,15 @@ export class FormField<T, Schema extends FormSchema> {
   #isEditing = ref(false)
   #value = ref<T | null>(null)
   protected getValue() {
-    return getProperty(this.#form.data, this.#context.value.path, null) as T
+    const nothing = Symbol('nothing')
+    const value = getProperty(this.#form.data, this.#context.value.path, nothing)
+
+    if (value === nothing) {
+      setProperty(this.#form.data, this.#context.value.path, null)
+      return null
+    }
+
+    return value as T
   }
 
   #context: Ref<FormFieldContext<T>>
