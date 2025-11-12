@@ -245,7 +245,7 @@ export function useFormCore<
 
               const nothing = Symbol('nothing')
               const value = getProperty(formData, path, nothing)
-              if (value === nothing) setProperty(formData, path, null)
+              if (value === nothing) setProperty(formData, path, undefined)
 
               field = new FormField(path, {
                 hooks,
