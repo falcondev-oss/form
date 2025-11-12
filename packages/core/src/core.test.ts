@@ -618,4 +618,26 @@ describe('hooks', () => {
 
     expect(hookOrder).toEqual(['beforeSubmit', 'submit', 'afterSubmit'])
   })
+
+  test('arrays', async () => {
+    const form = useFormCore({
+      schema: z.object({
+        items: z.array(
+          z.object({
+            a: z.string(),
+            b: z.number(),
+          }),
+        ),
+      }),
+      sourceValues: {
+        items: [],
+      },
+      async submit() {},
+    })
+
+    form.fields.items.at(2)?.a.$use()
+
+    // initialize first array occurrence in path with null
+    expect(form.data.items).toEqual([undefined, undefined, null])
+  })
 })

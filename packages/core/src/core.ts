@@ -244,9 +244,12 @@ export function useFormCore<
             } else {
               console.debug('$use', path)
 
-              const nothing = Symbol('nothing')
-              const value = getProperty(formData, path, nothing)
-              if (value === nothing) setProperty(formData, path, undefined)
+              const firstArrayItemPath = path.match(/(.*\[\d+\]).*/)?.[1]
+              if (firstArrayItemPath) {
+                const nothing = Symbol('nothing')
+                const value = getProperty(formData, firstArrayItemPath, nothing)
+                if (value === nothing) setProperty(formData, firstArrayItemPath, null)
+              }
 
               field = new FormField(path, {
                 hooks,
