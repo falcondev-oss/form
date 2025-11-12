@@ -214,7 +214,7 @@ export function useFormCore<
             const fieldValue = (getProperty(formData, path) ?? []) as unknown[]
 
             const { length } = fieldValue
-            const index = _index < 0 ? (_index % length) + length : _index
+            const index = _index >= 0 ? _index : length + _index
             return createFormFieldProxy(`${path}[${index}]`)
           }
         }
