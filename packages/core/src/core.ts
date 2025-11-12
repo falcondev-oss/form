@@ -211,10 +211,6 @@ export function useFormCore<
 
         if (prop === 'at') {
           return (_index: number) => {
-            const nothing = Symbol('nothing')
-            const value = getProperty(formData, path, nothing)
-            if (value === nothing) setProperty(formData, path, null)
-
             const fieldValue = (getProperty(formData, path) ?? []) as unknown[]
 
             const { length } = fieldValue
@@ -246,6 +242,10 @@ export function useFormCore<
               field = cachedField
             } else {
               console.debug('$use', path)
+
+              const nothing = Symbol('nothing')
+              const value = getProperty(formData, path, nothing)
+              if (value === nothing) setProperty(formData, path, null)
 
               field = new FormField(path, {
                 hooks,
