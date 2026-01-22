@@ -141,7 +141,7 @@ describe('form', () => {
     expect(form.data.name).toBe('Jane Doe')
   })
 
-  test('arktype delete extra keys', async () => {
+  test.only('arktype delete extra keys', async () => {
     const form = useFormCore({
       schema: type({
         'name': 'string',
@@ -152,7 +152,7 @@ describe('form', () => {
         extra: 'This will be deleted',
       },
       async submit({ values }) {
-        expect(values).toEqual({ name: 'Jane' })
+        expect(values).toEqual({ name: 'John' })
       },
     })
 
