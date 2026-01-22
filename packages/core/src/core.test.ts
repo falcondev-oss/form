@@ -141,14 +141,20 @@ describe('form', () => {
     expect(form.data.name).toBe('Jane Doe')
   })
 
-  test.only('arktype delete extra keys', async () => {
+  test('arktype delete extra keys', async () => {
     const form = useFormCore({
       schema: type({
         'name': 'string',
+        'nested': {
+          age: 'number',
+        },
         '+': 'delete',
       }),
       sourceValues: {
         name: 'John',
+        nested: {
+          age: null,
+        },
         extra: 'This will be deleted',
       },
       async submit({ values }) {
@@ -157,6 +163,27 @@ describe('form', () => {
     })
 
     await expect(form.submit()).resolves.toEqual({ success: true })
+  })
+
+  test('arktype mutates validation object', async () => {
+    const form = useFormCore({
+      schema: type({
+        'address': {
+          'city': 'string',
+          '+': 'delete',
+        },
+        '+': 'delete',
+      }),
+      sourceValues: {
+        address: {
+          city: null,
+        },
+      },
+      async submit() {},
+    })
+
+    form.fields.address.city.$use().handleChange('tiae')
+    form.fields.address.city.$use().handleBlur()
   })
 })
 

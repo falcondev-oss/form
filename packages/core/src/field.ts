@@ -13,7 +13,16 @@ import type {
   FormSchema,
   FormSourceValues,
 } from './types'
-import { computed, markRaw, reactive, ref, shallowReadonly, toRefs, watch } from '@vue/reactivity'
+import {
+  computed,
+  markRaw,
+  reactive,
+  ref,
+  shallowReadonly,
+  toRaw,
+  toRefs,
+  watch,
+} from '@vue/reactivity'
 import { setProperty } from 'dot-prop'
 import { isDeepEqual } from 'remeda'
 import { refEffect } from './reactive'
@@ -71,7 +80,7 @@ export class FormField<T, Schema extends FormSchema> {
 
   async validate() {
     const formResult = await Promise.resolve(
-      this.#form.opts.schema['~standard'].validate(this.#form.data),
+      this.#form.opts.schema['~standard'].validate(toRaw(this.#form.data)),
     )
     if (!formResult.issues) {
       this.#form.error.value = undefined
