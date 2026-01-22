@@ -11,7 +11,7 @@ import type {
   FormSchema,
   FormSourceValues,
 } from './types'
-import { computed, markRaw, reactive, ref, toValue, watch } from '@vue/reactivity'
+import { computed, markRaw, reactive, ref, toRaw, toValue, watch } from '@vue/reactivity'
 import { deleteProperty, getProperty, setProperty } from 'dot-prop'
 import { createHooks } from 'hookable'
 import { klona } from 'klona/full'
@@ -305,7 +305,7 @@ export function useFormCore<
 
   async function validateForm() {
     await hooks.callHook('beforeValidate')
-    const result = await Promise.resolve(formOpts.schema['~standard'].validate(formData))
+    const result = await Promise.resolve(formOpts.schema['~standard'].validate(toRaw(formData)))
     await hooks.callHook('afterValidate', result as StandardSchemaV1.Result<Schema>)
 
     if (!result.issues) {
