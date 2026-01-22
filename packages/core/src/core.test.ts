@@ -1,5 +1,6 @@
 import { ref, watch } from '@vue/reactivity'
 import { until } from '@vueuse/core'
+import { type } from 'arktype'
 import { describe, expect, expectTypeOf, test, vi } from 'vitest'
 import z from 'zod'
 import { useFormCore } from './core'
@@ -138,6 +139,24 @@ describe('form', () => {
     await form.submit()
     expect(form.isDirty).toBe(false)
     expect(form.data.name).toBe('Jane Doe')
+  })
+
+  test('arktype delete extra keys', async () => {
+    const form = useFormCore({
+      schema: type({
+        'name': 'string',
+        '+': 'delete',
+      }),
+      sourceValues: {
+        name: 'John',
+        extra: 'This will be deleted',
+      },
+      async submit({ values }) {
+        expect(values).toEqual({ name: 'Jane' })
+      },
+    })
+
+    await expect(form.submit()).resolves.toEqual({ success: true })
   })
 })
 

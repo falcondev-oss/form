@@ -73,6 +73,7 @@
     "type-fest": "^5.2.0"
   },
   "devDependencies": {
+    "arktype": "^2.1.29",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4",
     "zod": "^4.1.12"
