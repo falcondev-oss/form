@@ -6,6 +6,7 @@ import type {
   IsAny,
   IsLiteral,
   IsNever,
+  IsNull,
   IsSymbolLiteral,
   IsTuple,
   IsUnion,
@@ -223,46 +224,48 @@ export type BuildFormFieldAccessors<T, StopDiscriminator = false, _Root extends 
   IsAny<T>,
 ] extends [true]
   ? FormFieldAccessor<any> | FormFieldDiscriminatorAccessor<any, PropertyKey>
-  : [T] extends [(infer TT extends unknown[]) | null]
-    ? {
-        at: <const I extends number>(
-          index: I,
-        ) => [undefined] extends [TT[I]]
-          ? undefined
-          : BuildFormFieldAccessors<TT[I]> | (IsTuple<TT> extends true ? never : undefined)
-        delete: (key: string) => void
-        [Symbol.iterator]: () => ArrayIterator<
-          Reactive<BuildFormFieldAccessors<NonNullable<TT>[number]>>
-        >
-      } & FormFieldAccessor<T>
-    : [NonNullable<T>] extends [Record<string, unknown>]
-      ? ObjectHasFunctionsOrSymbols<T> extends true
-        ? FormFieldAccessor<T>
-        : GetDiscriminator<NonNullable<T>> extends (StopDiscriminator extends true ? any : never)
-          ? // regular object
-            FormFieldAccessor<T> & {
-              [K in keyof NonNullable<T>]-?: BuildFormFieldAccessors<NonNullable<T>[K]>
-            }
-          : // discriminated union object
-            GetDiscriminator<NonNullable<T>> extends infer DiscriminatorKey extends PropertyKey
-            ? NonNullable<T> extends Record<
-                DiscriminatorKey,
-                infer DiscriminatorValue extends DiscriminatorValueType | null
-              >
-              ? DistributeDiscriminatedProperties<
-                  NonNullable<T>,
+  : [IsNull<T>] extends [true]
+    ? FormFieldAccessor<T>
+    : [T] extends [(infer TT extends unknown[]) | null]
+      ? {
+          at: <const I extends number>(
+            index: I,
+          ) => [undefined] extends [TT[I]]
+            ? undefined
+            : BuildFormFieldAccessors<TT[I]> | (IsTuple<TT> extends true ? never : undefined)
+          delete: (key: string) => void
+          [Symbol.iterator]: () => ArrayIterator<
+            Reactive<BuildFormFieldAccessors<NonNullable<TT>[number]>>
+          >
+        } & FormFieldAccessor<T>
+      : [NonNullable<T>] extends [Record<string, unknown>]
+        ? ObjectHasFunctionsOrSymbols<T> extends true
+          ? FormFieldAccessor<T>
+          : GetDiscriminator<NonNullable<T>> extends (StopDiscriminator extends true ? any : never)
+            ? // regular object
+              FormFieldAccessor<T> & {
+                [K in keyof NonNullable<T>]-?: BuildFormFieldAccessors<NonNullable<T>[K]>
+              }
+            : // discriminated union object
+              GetDiscriminator<NonNullable<T>> extends infer DiscriminatorKey extends PropertyKey
+              ? NonNullable<T> extends Record<
                   DiscriminatorKey,
-                  NonNullable<DiscriminatorValue>
-                > &
-                  // combine all discriminator values into one accessor:
-                  // FormFieldAccessor<'A'> | FormFieldAccessor<'B'> => FormFieldAccessor<'A' | 'B'>
-                  // also handles multiple discriminator keys
-                  {
-                    [K in DiscriminatorKey]: FormFieldAccessor<NonNullable<T>[K]>
-                  } & FormFieldDiscriminatorAccessor<T, DiscriminatorKey>
+                  infer DiscriminatorValue extends DiscriminatorValueType | null
+                >
+                ? DistributeDiscriminatedProperties<
+                    NonNullable<T>,
+                    DiscriminatorKey,
+                    NonNullable<DiscriminatorValue>
+                  > &
+                    // combine all discriminator values into one accessor:
+                    // FormFieldAccessor<'A'> | FormFieldAccessor<'B'> => FormFieldAccessor<'A' | 'B'>
+                    // also handles multiple discriminator keys
+                    {
+                      [K in DiscriminatorKey]: FormFieldAccessor<NonNullable<T>[K]>
+                    } & FormFieldDiscriminatorAccessor<T, DiscriminatorKey>
+                : never
               : never
-            : never
-      : FormFieldAccessor<T>
+        : FormFieldAccessor<T>
 
 type DistributeDiscriminatedProperties<
   T,
