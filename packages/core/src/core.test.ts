@@ -153,12 +153,17 @@ describe('form', () => {
       sourceValues: {
         name: 'John',
         nested: {
-          age: null,
+          age: 42,
         },
         extra: 'This will be deleted',
       },
       async submit({ values }) {
-        expect(values).toEqual({ name: 'John' })
+        expect(values).toEqual({
+          name: 'John',
+          nested: {
+            age: 42,
+          },
+        })
       },
     })
 
@@ -315,6 +320,9 @@ describe('field', () => {
       >()
     }
     data.value = loadedData
+
+    expect('type' in unionField.$field).toBe(true)
+    expect('notFound' in unionField.$field).toBe(false)
 
     expect(unionField.$field.$use().value).toEqual({ type: 'A', value: 'Hello' })
     if (unionField.type === 'A') {

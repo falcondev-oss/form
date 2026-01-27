@@ -181,6 +181,10 @@ export function useFormCore<
       getOwnPropertyDescriptor(_target, _key) {
         return { enumerable: true, configurable: true, writable: false }
       },
+      has(_target, prop: string) {
+        const fieldValue = getProperty(formData, path, undefined)
+        return Reflect.has(fieldValue ?? {}, prop)
+      },
       get(_target, prop: string | symbol) {
         if (prop === Symbol.iterator) {
           const fieldValue = computed(() => getProperty(formData, path, []) as unknown[] | null)
