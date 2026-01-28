@@ -1,5 +1,5 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
-import type { Reactive, UnwrapNestedRefs } from '@vue/reactivity'
+import type { MaybeRefOrGetter, Reactive, UnwrapNestedRefs } from '@vue/reactivity'
 import type { Hookable, NestedHooks } from 'hookable'
 import type {
   If,
@@ -64,6 +64,7 @@ export interface FormOptions<
   schema: Schema
   sourceValues: MaybeGetter<SourceValues>
   submit: (ctx: { values: Output }) => Promise<void | { success: boolean }>
+  disabled?: MaybeRefOrGetter<boolean>
   hooks?: NestedHooks<FormHookDefinitions<Schema>>
   [extend]?: {
     setup?: <T>(field: FormFieldInternal<T>) => FormFieldExtend<T>
@@ -129,6 +130,7 @@ export type FormHandle = {
   isChanged: boolean
   isDirty: boolean
   isLoading: boolean
+  isDisabled: boolean
   errors: readonly [StandardSchemaV1.Issue, ...StandardSchemaV1.Issue[]] | undefined
   submit: () => Promise<unknown>
   reset: () => void

@@ -190,6 +190,31 @@ describe('form', () => {
     form.fields.address.city.$use().handleChange('tiae')
     form.fields.address.city.$use().handleBlur()
   })
+
+  test('form disabled state', async () => {
+    const disabled = ref(true)
+
+    const form = useFormCore({
+      schema: z.object({
+        name: z.string(),
+      }),
+      sourceValues: {
+        name: '',
+      },
+      disabled,
+      async submit() {},
+    })
+
+    const field = form.fields.name.$use()
+    expect(form.isLoading).toBe(false)
+    expect(form.isDisabled).toBe(true)
+    expect(field.disabled).toBe(true)
+
+    disabled.value = false
+    expect(form.isLoading).toBe(false)
+    expect(form.isDisabled).toBe(false)
+    expect(field.disabled).toBe(false)
+  })
 })
 
 describe('field', () => {

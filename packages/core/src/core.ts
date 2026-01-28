@@ -59,7 +59,7 @@ export function useFormCore<
   const isPending = ref(false)
   const isSubmitting = ref(false)
   const isLoading = computed(() => isSubmitting.value || isPending.value)
-  const disabled = computed(() => isLoading.value)
+  const disabled = computed<boolean>(() => isLoading.value || (toValue(formOpts.disabled) ?? false))
 
   const formError = ref<StandardSchemaV1.FailureResult>()
   const formDataRef = ref(clone(sourceValues.value ?? {})) as Ref<Data>
@@ -335,6 +335,7 @@ export function useFormCore<
     isDirty,
     isChanged: computed(() => !hasSubObject<object, object>(sourceValues.value ?? {}, formData)),
     isLoading,
+    isDisabled: disabled,
     data: computed(
       () =>
         (isPending.value ? undefined : observedFormData) as SourceValues extends undefined
