@@ -19,6 +19,7 @@ export function useFormHandles(forms: MaybeRefOrGetter<FormHandle[]>) {
     isChanged: computed(() => toValue(forms).some((f) => f.isChanged)),
     isDirty: computed(() => toValue(forms).some((f) => f.isDirty)),
     isLoading: computed(() => toValue(forms).some((f) => f.isLoading)),
+    isDisabled: computed(() => toValue(forms).some((f) => f.isDisabled)),
     errors: computed(() => toValue(forms).find((f) => f.errors)?.errors),
     submit: async () => Promise.all(toValue(forms).map(async (f) => f.submit())),
     reset: () => {
