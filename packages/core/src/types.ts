@@ -119,8 +119,7 @@ export type FormFieldContext<T> = Parameters<FormFieldInternal<T>[typeof setCont
 export interface FormFieldExtend<T> {}
 
 export interface FormField<T>
-  extends Readonly<Omit<FormFieldInternal<T>, '$'>>,
-    UnwrapNestedRefs<FormFieldExtend<T>> {
+  extends Readonly<Omit<FormFieldInternal<T>, '$'>>, UnwrapNestedRefs<FormFieldExtend<T>> {
   $: () => BuildFormFieldAccessors<T>
 }
 

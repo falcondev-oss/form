@@ -8,7 +8,11 @@ export default defineConfig({
       outDir: 'dist/',
     },
   },
+  checks: {
+    legacyCjs: false,
+  },
   platform: 'browser',
   noExternal: ['on-change'],
+  inlineOnly: ['on-change'],
   clean: true,
 })
