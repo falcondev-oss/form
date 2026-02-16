@@ -13,6 +13,10 @@ concurrency:
   group: deploy
   cancel-in-progress: false # canceling could break state
 
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
   publish:
     name: Publish
@@ -29,6 +33,4 @@ jobs:
         run: pnpm build
 
       - name: Publish
-        run: pnpm -r publish --access=public --no-git-checks --tag $(npx simple-dist-tag)
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: pnpm -r publish --access=public --provenance --no-git-checks --tag $(npx simple-dist-tag)
