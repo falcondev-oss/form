@@ -1,7 +1,6 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type { ComputedRef, Ref } from '@vue/reactivity'
 import type { Hookable } from 'hookable'
-import type { ZodType } from 'zod'
 import type { FieldCache } from './core'
 import type {
   FormData,
@@ -13,22 +12,12 @@ import type {
   FormSchema,
   FormSourceValues,
 } from './types'
-import {
-  computed,
-  markRaw,
-  reactive,
-  ref,
-  shallowReadonly,
-  toRaw,
-  toRefs,
-  watch,
-} from '@vue/reactivity'
+import { computed, reactive, ref, shallowReadonly, toRaw, toRefs, watch } from '@vue/reactivity'
 import { setProperty } from 'dot-prop'
 import { isDeepEqual } from 'remeda'
 import { refEffect } from './reactive'
 import { extend, setContext } from './types'
 import { getProperty, pathSegmentsToPathString } from './util'
-import { getValidatorByPath } from './validator'
 
 export type Form<Schema extends FormSchema> = {
   hooks: Hookable<FormHookDefinitions<Schema>>
@@ -205,11 +194,6 @@ export class FormField<T, Schema extends FormSchema> {
       if (form.isLoading.value) this.#errors.reset()
     })
 
-    const validator = getValidatorByPath(
-      form.opts.schema as unknown as ZodType,
-      path.replaceAll(/\[(\d+)\]/g, '.$1').split('.'),
-    )
-
     const api = reactive({
       disabled: form.disabled,
       errors: this.#errors,
@@ -222,7 +206,6 @@ export class FormField<T, Schema extends FormSchema> {
       value: shallowReadonly(this.#value) as Ref<T>,
       path,
       key: `${path}@${this.#now}`,
-      validator: validator ? markRaw(validator) : undefined,
       [setContext]: this.#setContext.bind(this),
     })
     this.api = api satisfies FormFieldInternal<T>

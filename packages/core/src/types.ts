@@ -15,7 +15,6 @@ import type {
   Simplify,
   Writable,
 } from 'type-fest'
-import type { ZodType } from 'zod/v4'
 
 type ObjectHasFunctionsOrSymbols<T> =
   IsAny<T[keyof T]> extends true
@@ -109,7 +108,6 @@ export type FormFieldInternal<T> = {
   isChanged: boolean
   path: string
   key: string
-  validator: ZodType | undefined
   $?: () => BuildFormFieldAccessors<any>
   [setContext]: (ctx: { path: string }) => void
 }

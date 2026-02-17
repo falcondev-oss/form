@@ -2,7 +2,7 @@
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "composite": false,
-    "lib": ["es2022"],
+    "lib": ["es2024"],
     "declarationMap": false,
     "emitDeclarationOnly": false
   },
