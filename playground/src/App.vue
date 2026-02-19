@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import { useForm } from '@falcondev-oss/form-vue'
-import { reactive } from 'vue'
+import { reactive, watch } from 'vue'
 import z from 'zod'
 
 const data = reactive({
   text: 'Hello World',
 })
+watch(data, console.log)
 
 const form = useForm({
   schema: z.object({
-    text: z.string(),
+    text: z.union([z.string(), z.number().max(10)]),
   }),
   sourceValues() {
     console.log('sourceValues()')
@@ -28,13 +29,14 @@ const textField = form.fields.text.$use()
 <template>
   <div class="flex flex-col">
     <pre>{{ form }}</pre>
+    <pre>{{ form.fields.text.$use().schema }}</pre>
     <textarea
-      v-model="textField.model"
+      v-model.number="textField.model"
       class="h-32 w-full border p-2"
       :disabled="textField.disabled"
       @blur="textField.handleBlur"
     />
-    <button @click="form.submit">Submit{{ form.isLoading.value ? 'ing...' : '' }}</button>
+    <button @click="form.submit">Submit{{ form.isLoading ? 'ting...' : '' }}</button>
   </div>
 </template>
 

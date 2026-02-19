@@ -1,5 +1,6 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type { ComputedRef, Ref } from '@vue/reactivity'
+import type { FieldOpts } from './field'
 import type {
   BuildFormFieldAccessors,
   FormData,
@@ -11,7 +12,16 @@ import type {
   FormSchema,
   FormSourceValues,
 } from './types'
-import { computed, markRaw, reactive, ref, toRaw, toValue, watch } from '@vue/reactivity'
+import {
+  computed,
+  isReactive,
+  markRaw,
+  reactive,
+  ref,
+  toRaw,
+  toValue,
+  watch,
+} from '@vue/reactivity'
 import { deleteProperty, getProperty, setProperty } from 'dot-prop'
 import { createHooks } from 'hookable'
 import { klona } from 'klona/full'
@@ -170,7 +180,7 @@ export function useFormCore<
     },
   )
 
-  function createFormFieldProxy(path = '') {
+  function createFormFieldProxy(path = '', fieldOpts?: FieldOpts) {
     // console.debug('createFormFieldProxy():', path)
     return new Proxy(Object.create(null) as BuildFormFieldAccessors<Data, false, true>, {
       ownKeys() {
@@ -247,6 +257,7 @@ export function useFormCore<
             } else {
               console.debug('$use', path)
 
+              // initialize first array occurrence in path with null
               const firstArrayItemPath = path.match(/(.*\[\d+\]).*/)?.[1]
               if (firstArrayItemPath) {
                 const nothing = Symbol('nothing')
@@ -254,18 +265,27 @@ export function useFormCore<
                 if (value === nothing) setProperty(formData, firstArrayItemPath, null)
               }
 
-              field = new FormField(path, {
-                hooks,
-                disabled,
-                updateCount: formUpdateCount,
-                data: formData,
-                opts: formOpts,
-                error: formError,
-                sourceValues,
-                isLoading,
-                isPending,
-                fieldCache,
+              const jsonSchema = formOpts.schema['~standard'].jsonSchema.input({
+                target: 'draft-07',
               })
+
+              field = new FormField(
+                path,
+                {
+                  hooks,
+                  disabled,
+                  updateCount: formUpdateCount,
+                  data: formData,
+                  opts: formOpts,
+                  error: formError,
+                  sourceValues,
+                  isLoading,
+                  isPending,
+                  fieldCache,
+                  jsonSchema,
+                },
+                fieldOpts,
+              )
 
               Object.defineProperty(field.api, '$', {
                 get() {
@@ -286,7 +306,7 @@ export function useFormCore<
                   () =>
                     (field.api.value as Record<string, unknown> | null)?.[discriminator] ?? null,
                 ),
-                $field: computed(() => createFormFieldProxy(field.api.path)),
+                $field: computed(() => createFormFieldProxy(field.api.path, { discriminator })),
               })
             }
 
@@ -309,8 +329,10 @@ export function useFormCore<
 
   async function validateForm() {
     await hooks.callHook('beforeValidate')
-    const result = await Promise.resolve(formOpts.schema['~standard'].validate(toRaw(formData)))
-    await hooks.callHook('afterValidate', result as StandardSchemaV1.Result<Schema>)
+    const result = (await Promise.resolve(
+      formOpts.schema['~standard'].validate(toRaw(formData)),
+    )) as StandardSchemaV1.Result<Schema>
+    await hooks.callHook('afterValidate', result)
 
     if (!result.issues) {
       formError.value = undefined

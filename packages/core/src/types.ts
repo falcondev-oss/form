@@ -1,6 +1,7 @@
-import type { StandardSchemaV1 } from '@standard-schema/spec'
+import type { StandardJSONSchemaV1, StandardSchemaV1 } from '@standard-schema/spec'
 import type { MaybeRefOrGetter, Reactive, UnwrapNestedRefs } from '@vue/reactivity'
 import type { Hookable, NestedHooks } from 'hookable'
+import type { JSONSchema7, JSONSchema7Type } from 'json-schema'
 import type {
   If,
   IsAny,
@@ -15,6 +16,20 @@ import type {
   Simplify,
   Writable,
 } from 'type-fest'
+
+export interface StandardSchemasProps<Input = unknown, Output = Input>
+  extends StandardSchemaV1.Props<Input, Output>, StandardJSONSchemaV1.Props<Input, Output> {}
+
+/**
+ * An interface that combines StandardJSONSchema and StandardSchema.
+ */
+export interface StandardSchemasSpec<Input = unknown, Output = Input> {
+  '~standard': StandardSchemasProps<Input, Output>
+}
+
+declare module 'json-schema-library' {
+  interface JsonSchema extends JSONSchema7 {}
+}
 
 type ObjectHasFunctionsOrSymbols<T> =
   IsAny<T[keyof T]> extends true
@@ -44,7 +59,7 @@ export type NullableDeep<T> =
       : T | null
     : never
 
-export type FormSchema = StandardSchemaV1
+export type FormSchema = StandardSchemasSpec
 export type FormData<Schema extends FormSchema> = NonNullable<
   NullableDeep<StandardSchemaV1.InferOutput<Schema>>
 >
@@ -96,8 +111,28 @@ export const setContext = Symbol('setContext')
 //     ? Array<NonPrimitiveReadonly<I>>
 //     : Readonly<T>
 
+export type SchemaMeta = {
+  required?: boolean
+
+  title?: string
+  description?: string
+  default?: JSONSchema7Type
+  examples?: JSONSchema7Type
+
+  minimum?: number
+  exclusiveMinimum?: number
+  maximum?: number
+  exclusiveMaximum?: number
+
+  minLength?: number
+  maxLength?: number
+
+  id?: string
+}
+
 export type FormFieldInternal<T> = {
   errors: string[] | undefined
+  schema: SchemaMeta
   value: T
   handleChange: (value: T) => void
   handleBlur: () => void
@@ -229,9 +264,11 @@ export type BuildFormFieldAccessors<T, StopDiscriminator = false, _Root extends 
       ? {
           at: <const I extends number>(
             index: I,
-          ) => [undefined] extends [TT[I]]
-            ? undefined
-            : BuildFormFieldAccessors<TT[I]> | (IsTuple<TT> extends true ? never : undefined)
+          ) => IsTuple<TT> extends true
+            ? [undefined] extends [TT[I]]
+              ? never
+              : BuildFormFieldAccessors<TT[I]>
+            : BuildFormFieldAccessors<TT[I]>
           delete: (key: string) => void
           [Symbol.iterator]: () => ArrayIterator<
             Reactive<BuildFormFieldAccessors<NonNullable<TT>[number]>>

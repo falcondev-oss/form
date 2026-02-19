@@ -238,7 +238,7 @@ describe('field', () => {
       },
       async submit() {},
     })
-    const nestedField = form.fields.array.at(0)!.name.$use()
+    const nestedField = form.fields.array.at(0).name.$use()
     const ageField = form.fields.age.$use()
 
     expect(nestedField.errors).toEqual(undefined)
@@ -442,7 +442,7 @@ describe('field', () => {
       expect(stringField.path).toBe(String.raw`foo\.bar`)
 
       // array (has special cache handling)
-      const arrayField = form.fields['foo.bar.array'].at(0)!.$use()
+      const arrayField = form.fields['foo.bar.array'].at(0).$use()
       expect(arrayField.value).toBe('one')
       expect(form.data['foo.bar.array']?.[0]).toEqual('one')
 
@@ -463,7 +463,7 @@ describe('field', () => {
         async submit() {},
       })
 
-      const arrayField = form.fields.array.at(0)!.$use()
+      const arrayField = form.fields.array.at(0).$use()
       expect(arrayField.value).toBe('one')
       expect(form.data.array?.[0]).toEqual('one')
 

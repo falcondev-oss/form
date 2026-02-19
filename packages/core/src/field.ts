@@ -1,6 +1,8 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type { ComputedRef, Ref } from '@vue/reactivity'
 import type { Hookable } from 'hookable'
+import type { JsonSchema } from 'json-schema-library'
+import type { JSONSchema } from 'zod/v4/core'
 import type { FieldCache } from './core'
 import type {
   FormData,
@@ -16,6 +18,7 @@ import { computed, reactive, ref, shallowReadonly, toRaw, toRefs, watch } from '
 import { setProperty } from 'dot-prop'
 import { isDeepEqual } from 'remeda'
 import { refEffect } from './reactive'
+import { getSchemaMeta } from './schema-meta'
 import { extend, setContext } from './types'
 import { getProperty, pathSegmentsToPathString } from './util'
 
@@ -30,7 +33,10 @@ export type Form<Schema extends FormSchema> = {
   isLoading: Ref<boolean>
   isPending: Ref<boolean>
   fieldCache: FieldCache
+  jsonSchema: JSONSchema.BaseSchema
 }
+
+export type FieldOpts = { discriminator?: string }
 
 function filterFieldIssues(fieldPath: string, fieldCache: FieldCache) {
   return (issue: StandardSchemaV1.Issue): boolean => {
@@ -159,7 +165,7 @@ export class FormField<T, Schema extends FormSchema> {
     this.api.path = ctx.path
   }
 
-  constructor(path: string, form: Form<Schema>) {
+  constructor(path: string, form: Form<Schema>, opts?: FieldOpts) {
     this.#form = form
 
     this.#context = ref({ path })
@@ -194,9 +200,14 @@ export class FormField<T, Schema extends FormSchema> {
       if (form.isLoading.value) this.#errors.reset()
     })
 
+    const schemaMeta = computed(() =>
+      getSchemaMeta(form.jsonSchema as JsonSchema, form.data, path, opts),
+    )
+
     const api = reactive({
       disabled: form.disabled,
       errors: this.#errors,
+      schema: schemaMeta,
       handleChange: this.#handleChange.bind(this),
       handleBlur: this.#handleBlur.bind(this),
       reset: this.#reset.bind(this),
