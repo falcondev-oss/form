@@ -4,13 +4,19 @@ import { reactive, watch } from 'vue'
 import z from 'zod'
 
 const data = reactive({
-  text: 'Hello World',
+  text: null as string | number | null,
 })
 watch(data, console.log)
 
 const form = useForm({
   schema: z.object({
-    text: z.union([z.string(), z.number().max(10)]),
+    text: z
+      .string()
+      .min(5)
+      .max(20)
+      .nullable()
+      .meta({ title: 'Text' })
+      .or(z.number().min(0).max(100).meta({ title: 'Number' })),
   }),
   sourceValues() {
     console.log('sourceValues()')

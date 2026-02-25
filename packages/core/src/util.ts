@@ -40,3 +40,7 @@ export const getProperty = ((
   if (args[1].length === 0) return args[0]
   return getProperty_(...args)
 }) as typeof getProperty_
+
+export function isPrimitive(value: unknown): value is string | number | boolean {
+  return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+}

@@ -111,6 +111,15 @@ export const setContext = Symbol('setContext')
 //     ? Array<NonPrimitiveReadonly<I>>
 //     : Readonly<T>
 
+export const contraints = [
+  'minimum',
+  'exclusiveMinimum',
+  'maximum',
+  'exclusiveMaximum',
+  'minLength',
+  'maxLength',
+] as const satisfies readonly (keyof JSONSchema7)[]
+
 export type SchemaMeta = {
   required?: boolean
 
@@ -126,8 +135,6 @@ export type SchemaMeta = {
 
   minLength?: number
   maxLength?: number
-
-  id?: string
 }
 
 export type FormFieldInternal<T> = {

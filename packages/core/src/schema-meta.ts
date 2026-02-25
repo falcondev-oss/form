@@ -5,7 +5,8 @@ import type { SchemaMeta } from './types'
 import { compileSchema } from 'json-schema-library'
 import * as R from 'remeda'
 import { match } from 'ts-pattern'
-import { getProperty } from './util'
+import { contraints } from './types'
+import { getProperty, isPrimitive } from './util'
 
 function matchSchemaType(type: JSONSchema7TypeName, value: unknown) {
   return match(type)
@@ -52,20 +53,12 @@ export function getSchemaMeta(
   reducedSchema = reducedNode.schema
   console.debug('reducedSchema', reducedSchema)
 
-  if (R.isEmpty(reducedSchema) && (node.anyOf || node.oneOf)) {
-    const of = node.anyOf ? 'anyOf' : 'oneOf'
-    const matchingType = node.schema[of]
-      ?.filter(R.isObjectType)
-      .find(
-        (s) =>
-          s.type &&
-          (Array.isArray(s.type)
-            ? s.type.some((t) => matchSchemaType(t, value))
-            : matchSchemaType(s.type, value)),
-      )
-    console.debug('fallback reducedSchema', node.schema[of], matchingType)
+  if (R.isEmpty(R.pick(reducedSchema, contraints)) && (node.anyOf || node.oneOf)) {
+    const matchingBranch = getMatchingBranch(node.schema, value)
 
-    reducedSchema = matchingType
+    console.debug('fallback reducedSchema', matchingBranch, node.schema)
+
+    reducedSchema = matchingBranch
   }
 
   const isNullable = node.validate(null).valid
@@ -89,4 +82,37 @@ export function getSchemaMeta(
       'id',
     ]),
   }
+}
+
+function getMatchingBranch(schema: JsonSchema, value: unknown): JsonSchema | undefined {
+  console.debug('getMatchingBranch', { schema, value })
+  if (!schema.anyOf && !schema.oneOf) return schema
+
+  const of = schema.anyOf ? 'anyOf' : 'oneOf'
+  const matchingBranch = mapFind(schema[of]?.filter(R.isObjectType) ?? [], (s) => {
+    const m = getMatchingBranch(s, value)
+    if (!m) return
+
+    if (
+      m.type &&
+      (Array.isArray(m.type)
+        ? m.type.some((t) => matchSchemaType(t, value))
+        : matchSchemaType(m.type, value))
+    )
+      return m
+  })
+
+  // append branch-shared metadata
+  Object.assign(matchingBranch ?? {}, R.pickBy(schema, isPrimitive))
+
+  console.debug('matchingBranch', matchingBranch)
+  return matchingBranch
+}
+
+function mapFind<T, U>(array: T[], fn: (item: T) => U | undefined): U | undefined {
+  for (const item of array) {
+    const result = fn(item)
+    if (result !== undefined) return result
+  }
+  return undefined
 }
