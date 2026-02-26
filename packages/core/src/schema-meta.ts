@@ -62,9 +62,10 @@ export function getSchemaMeta(
   }
 
   const isNullable = node.validate(null).valid
-  const parentSchema = node.parent?.schema
-  const propertyName = node.schemaLocation.split('/').pop()!
-  const required = !parentSchema || (!!parentSchema.required?.includes(propertyName) && !isNullable)
+  const pointerArray = pointer.split('/')
+  const prop = pointerArray.pop()!
+  const parentSchema = schema.getNode(pointerArray.join('/')).node!.schema
+  const required = !parentSchema || (!!parentSchema.required?.includes(prop) && !isNullable)
 
   return {
     required,
