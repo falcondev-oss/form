@@ -2,7 +2,7 @@ import type { ToJsonSchema } from '@ark/schema'
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type { ComputedRef, Ref } from '@vue/reactivity'
 import type { JsonSchema } from 'json-schema-library'
-import type { ToJSONSchemaParams } from 'zod/v4/core'
+import type { $ZodTypeDef, ToJSONSchemaParams } from 'zod/v4/core'
 import type { FieldOpts } from './field'
 import type {
   BuildFormFieldAccessors,
@@ -104,6 +104,19 @@ export function useFormCore<
   const standardSchema = formOpts.schema['~standard']
   console.debug('standardSchema', standardSchema)
 
+  const zodUnrepresentableTypes: Set<$ZodTypeDef['type']> = new Set([
+    'bigint',
+    'symbol',
+    'undefined',
+    'void',
+    'date',
+    'map',
+    'set',
+    'transform',
+    'nan',
+    'custom',
+  ])
+
   const libraryOptions = match(standardSchema.vendor)
     .with(
       'zod',
@@ -122,8 +135,10 @@ export function useFormCore<
               return
             }
 
-            ctx.jsonSchema.type = 'object'
-            ctx.jsonSchema.format = zod.def.type
+            if (zodUnrepresentableTypes.has(ctx.zodSchema._zod.def.type)) {
+              ctx.jsonSchema.type = 'object'
+              ctx.jsonSchema.format = zod.def.type
+            }
           },
         }) satisfies ToJSONSchemaParams,
     )
