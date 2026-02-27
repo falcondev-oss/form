@@ -71,12 +71,12 @@
     "on-change": "^6.0.2",
     "remeda": "^2.33.6",
     "ts-pattern": "^5.9.0",
-    "type-fest": "^5.4.4",
-    "zod": "^4.3.6"
+    "type-fest": "^5.4.4"
   },
   "devDependencies": {
     "arktype": "^2.1.29",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.18"
+    "vitest": "^4.0.18",
+    "zod": "^4.3.6"
   }
 }

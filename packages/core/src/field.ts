@@ -2,7 +2,6 @@ import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type { ComputedRef, Ref } from '@vue/reactivity'
 import type { Hookable } from 'hookable'
 import type { JsonSchema } from 'json-schema-library'
-import type { JSONSchema } from 'zod/v4/core'
 import type { FieldCache } from './core'
 import type {
   FormData,
@@ -33,7 +32,7 @@ export type Form<Schema extends FormSchema> = {
   isLoading: Ref<boolean>
   isPending: Ref<boolean>
   fieldCache: FieldCache
-  jsonSchema: JSONSchema.BaseSchema
+  jsonSchema: JsonSchema | undefined
 }
 
 export type FieldOpts = { discriminator?: string }
@@ -201,7 +200,7 @@ export class FormField<T, Schema extends FormSchema> {
     })
 
     const schemaMeta = computed(() =>
-      getSchemaMeta(form.jsonSchema as JsonSchema, form.data, path, opts),
+      form.jsonSchema ? getSchemaMeta(form.jsonSchema, form.data, path, opts) : {},
     )
 
     const api = reactive({

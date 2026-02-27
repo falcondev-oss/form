@@ -61,7 +61,7 @@ export type NullableDeep<T> =
 
 export type FormSchema = StandardSchemasSpec
 export type FormData<Schema extends FormSchema> = NonNullable<
-  NullableDeep<StandardSchemaV1.InferOutput<Schema>>
+  NullableDeep<StandardSchemaV1.InferInput<Schema>>
 >
 
 export const extend = Symbol('extend')

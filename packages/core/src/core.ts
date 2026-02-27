@@ -1,5 +1,6 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type { ComputedRef, Ref } from '@vue/reactivity'
+import type { JsonSchema } from 'json-schema-library'
 import type { FieldOpts } from './field'
 import type {
   BuildFormFieldAccessors,
@@ -256,9 +257,20 @@ export function useFormCore<
                 if (value === nothing) setProperty(formData, firstArrayItemPath, null)
               }
 
-              const jsonSchema = formOpts.schema['~standard'].jsonSchema.input({
-                target: 'draft-07',
-              })
+              let jsonSchema: JsonSchema | undefined
+              try {
+                jsonSchema = formOpts.schema['~standard'].jsonSchema.input({
+                  target: 'draft-07',
+                })
+              } catch (err) {
+                console.warn(
+                  'Failed to generate JSON Schema from Standard Schema. No schema information extraction possible.\n' +
+                    'Make sure your schema is compatible with JSON Schema Draft-07.\n' +
+                    'For non-representable data types, use a transformation/serializer that maps them to representable types. (e.g. Zod Codecs)\n\n' +
+                    'Error details:',
+                  err,
+                )
+              }
 
               field = new FormField(
                 path,
