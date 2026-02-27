@@ -1,6 +1,8 @@
+import type { ToJsonSchema } from '@ark/schema'
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type { ComputedRef, Ref } from '@vue/reactivity'
 import type { JsonSchema } from 'json-schema-library'
+import type { ToJSONSchemaParams } from 'zod/v4/core'
 import type { FieldOpts } from './field'
 import type {
   BuildFormFieldAccessors,
@@ -99,10 +101,61 @@ export function useFormCore<
     reset()
   })
 
+  const standardSchema = formOpts.schema['~standard']
+  console.debug('standardSchema', standardSchema)
+
+  const libraryOptions = match(standardSchema.vendor)
+    .with(
+      'zod',
+      () =>
+        ({
+          unrepresentable: 'any',
+
+          override(ctx) {
+            const zod = ctx.zodSchema._zod
+
+            if (zod.def.type === 'date') {
+              ctx.jsonSchema.type = 'integer'
+              ctx.jsonSchema.format = 'epoch'
+              ctx.jsonSchema.minimum = (zod.bag.minimum as Date | undefined)?.getTime()
+              ctx.jsonSchema.maximum = (zod.bag.maximum as Date | undefined)?.getTime()
+              return
+            }
+
+            ctx.jsonSchema.type = 'object'
+            ctx.jsonSchema.format = zod.def.type
+          },
+        }) satisfies ToJSONSchemaParams,
+    )
+    .with(
+      'arktype',
+      () =>
+        ({
+          fallback: {
+            default: (ctx) => ({
+              ...ctx.base,
+              type: 'object',
+              format: ctx.code,
+            }),
+            date: (ctx) => ({
+              ...ctx.base,
+              type: 'integer',
+              format: 'epoch',
+              exclusiveMaximum: ctx.before?.getTime(),
+              exclusiveMinimum: ctx.after?.getTime(),
+            }),
+          },
+        }) satisfies ToJsonSchema.Options,
+    )
+    .otherwise(() => undefined)
+
+  console.debug('libraryOptions', libraryOptions)
+
   let jsonSchema: JsonSchema | undefined
   try {
-    jsonSchema = formOpts.schema['~standard'].jsonSchema.input({
+    jsonSchema = standardSchema.jsonSchema.input({
       target: 'draft-07',
+      libraryOptions,
     })
   } catch (err) {
     console.warn(
@@ -333,7 +386,7 @@ export function useFormCore<
   async function validateForm() {
     await hooks.callHook('beforeValidate')
     const result = (await Promise.resolve(
-      formOpts.schema['~standard'].validate(toRaw(formData)),
+      standardSchema.validate(toRaw(formData)),
     )) as StandardSchemaV1.Result<Schema>
     await hooks.callHook('afterValidate', result)
 

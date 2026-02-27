@@ -8,15 +8,19 @@ import { match } from 'ts-pattern'
 import { contraints } from './types'
 import { getProperty, isPrimitive } from './util'
 
-function matchSchemaType(type: JSONSchema7TypeName, value: unknown) {
-  return match(type)
-    .with('string', () => typeof value === 'string')
-    .with('number', () => typeof value === 'number')
-    .with('integer', () => typeof value === 'number' && Number.isInteger(value))
-    .with('boolean', () => typeof value === 'boolean')
-    .with('array', () => Array.isArray(value))
-    .with('object', () => typeof value === 'object' && value !== null && !Array.isArray(value))
-    .with('null', () => value === null)
+function matchSchemaType(schema: { type: JSONSchema7TypeName; format?: string }, value: unknown) {
+  return match(schema)
+    .with({ type: 'string' }, () => typeof value === 'string')
+    .with({ type: 'number' }, () => typeof value === 'number')
+    .with({ type: 'integer', format: 'epoch' }, () => value instanceof Date)
+    .with({ type: 'integer' }, () => typeof value === 'number' && Number.isInteger(value))
+    .with({ type: 'boolean' }, () => typeof value === 'boolean')
+    .with({ type: 'array' }, () => Array.isArray(value))
+    .with(
+      { type: 'object' },
+      () => typeof value === 'object' && value !== null && !Array.isArray(value),
+    )
+    .with({ type: 'null' }, () => value === null)
     .exhaustive()
 }
 
@@ -97,8 +101,8 @@ function getMatchingBranch(schema: JsonSchema, value: unknown): JsonSchema | und
     if (
       m.type &&
       (Array.isArray(m.type)
-        ? m.type.some((t) => matchSchemaType(t, value))
-        : matchSchemaType(m.type, value))
+        ? m.type.some((t) => matchSchemaType({ type: t, format: m.format }, value))
+        : matchSchemaType({ type: m.type, format: m.format }, value))
     )
       return m
   })
