@@ -66,6 +66,9 @@ importers:
       '@ark/schema':
         specifier: ^0.56.0
         version: 0.56.0
+      arktype:
+        specifier: ^2.1.29
+        version: 2.1.29
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
