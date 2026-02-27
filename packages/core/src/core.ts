@@ -99,6 +99,21 @@ export function useFormCore<
     reset()
   })
 
+  let jsonSchema: JsonSchema | undefined
+  try {
+    jsonSchema = formOpts.schema['~standard'].jsonSchema.input({
+      target: 'draft-07',
+    })
+  } catch (err) {
+    console.warn(
+      'Failed to generate JSON Schema from Standard Schema. No schema information extraction possible.\n' +
+        'Make sure your schema is compatible with JSON Schema Draft-07.\n' +
+        'For non-representable data types, use a transformation/serializer that maps them to representable types. (e.g. Zod Codecs)\n\n' +
+        'Error details:',
+      err,
+    )
+  }
+
   const fieldCache: FieldCache = {}
 
   const iteratorFieldsCache = new Map<string, ComputedRef<BuildFormFieldAccessors<any>[]>>()
@@ -255,21 +270,6 @@ export function useFormCore<
                 const nothing = Symbol('nothing')
                 const value = getProperty(formData, firstArrayItemPath, nothing)
                 if (value === nothing) setProperty(formData, firstArrayItemPath, null)
-              }
-
-              let jsonSchema: JsonSchema | undefined
-              try {
-                jsonSchema = formOpts.schema['~standard'].jsonSchema.input({
-                  target: 'draft-07',
-                })
-              } catch (err) {
-                console.warn(
-                  'Failed to generate JSON Schema from Standard Schema. No schema information extraction possible.\n' +
-                    'Make sure your schema is compatible with JSON Schema Draft-07.\n' +
-                    'For non-representable data types, use a transformation/serializer that maps them to representable types. (e.g. Zod Codecs)\n\n' +
-                    'Error details:',
-                  err,
-                )
               }
 
               field = new FormField(
