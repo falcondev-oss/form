@@ -447,10 +447,12 @@ export function useFormCore<
 
       try {
         const validationResult = await validateForm()
-
         if (!validationResult) {
           isSubmitting.value = false
-          return { success: false }
+
+          const result = { success: false }
+          await hooks.callHook('afterSubmit', result)
+          return result
         }
 
         const ctx = { values: validationResult }

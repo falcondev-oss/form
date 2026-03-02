@@ -546,16 +546,24 @@ describe('hooks', () => {
       },
       async submit({ values }) {
         expect(values).toEqual({ name: 'John' })
-        return { success: true }
       },
     })
 
-    const result = await form.submit()
+    let result = await form.submit()
 
     expect(result.success).toBe(true)
     expect(beforeSubmitSpy).toHaveBeenCalledWith({ data: { name: 'John' } })
     expect(afterSubmitSpy).toHaveBeenCalledWith({ success: true })
     expect(beforeSubmitSpy).toHaveBeenCalledBefore(afterSubmitSpy)
+
+    // @ts-expect-error test validation
+    form.data.name = 2
+
+    result = await form.submit()
+
+    expect(result.success).toBe(false)
+    expect(beforeSubmitSpy).toHaveBeenNthCalledWith(2, { data: { name: 2 } })
+    expect(afterSubmitSpy).toHaveBeenNthCalledWith(2, { success: false })
   })
 
   // test('beforeReset, afterReset', () => {
