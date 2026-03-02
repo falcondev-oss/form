@@ -267,7 +267,7 @@ export type BuildFormFieldAccessors<T, StopDiscriminator = false, _Root extends 
   ? FormFieldAccessor<any> | FormFieldDiscriminatorAccessor<any, PropertyKey>
   : [IsNull<T>] extends [true]
     ? FormFieldAccessor<T>
-    : [T] extends [(infer TT extends unknown[]) | null]
+    : [NonNullable<T>] extends [infer TT extends unknown[]]
       ? {
           at: <const I extends number>(
             index: I,
