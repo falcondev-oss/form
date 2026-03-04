@@ -59,10 +59,11 @@ export type NullableDeep<T> =
       : T | null
     : never
 
-export type FormSchema = StandardSchemasSpec
+export type FormSchema = StandardSchemasSpec<object>
 export type FormData<Schema extends FormSchema> = NonNullable<
   NullableDeep<StandardSchemaV1.InferInput<Schema>>
 >
+export type FormSubmitValues<Schema extends FormSchema> = StandardSchemaV1.InferOutput<Schema>
 
 export const extend = Symbol('extend')
 
@@ -73,11 +74,11 @@ export type FormSourceValues<S extends FormSchema> = Writable<FormData<S>> | und
 export interface FormOptions<
   Schema extends FormSchema,
   SourceValues extends FormSourceValues<Schema> = FormSourceValues<Schema>,
-  Output extends StandardSchemaV1.InferOutput<Schema> = StandardSchemaV1.InferOutput<Schema>,
+  SubmitValues extends FormSubmitValues<Schema> = FormSubmitValues<Schema>,
 > {
   schema: Schema
   sourceValues: MaybeGetter<SourceValues>
-  submit: (ctx: { values: Output }) => Promise<void | { success: boolean }>
+  submit: (ctx: { values: SubmitValues }) => Promise<void | { success: boolean }>
   disabled?: MaybeRefOrGetter<boolean>
   hooks?: NestedHooks<FormHookDefinitions<Schema>>
   [extend]?: {
