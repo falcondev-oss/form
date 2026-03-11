@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { useForm } from '@falcondev-oss/form-vue'
 import { type } from 'arktype'
-import { reactive, watch } from 'vue'
-import z from 'zod'
 
 const form = useForm({
   schema: type({
