@@ -39,9 +39,6 @@ export function useForm<
   const { form, sourceValuesRef, submitFnRef } = useMemo(() => {
     const sourceValuesRef = refEffect(opts.sourceValues)
     const submitFnRef = ref(opts.submit)
-    // watch(sourceValuesRef, () => {
-    //   console.debug('useForm().watch -> rerender', { sourceValues: sourceValuesRef.value })
-    // })
 
     const tickRef = ref(0)
     const form = useFormCore({
@@ -55,12 +52,9 @@ export function useForm<
           } satisfies Omit<FormFieldExtend<any>, 'model'> as FormFieldExtend<any>
         },
         $use: (field) => {
-          // console.debug('$use()', field.path)
-
           watch(
             () => [field.errors, field.value],
             () => {
-              // console.debug('$use().watch -> rerender', { errors: field.errors })
               tickRef.value = Date.now()
               setTick(Date.now())
             },
@@ -90,18 +84,13 @@ export function useForm<
 
   useEffect(() => {
     if (typeof opts.sourceValues === 'function') return
-    // console.debug('useForm().useEffect(..., [opts.sourceValues])', opts.sourceValues)
-
     sourceValuesRef.value = opts.sourceValues
   }, [opts.sourceValues])
 
   useEffect(() => {
-    // console.debug('useForm().useEffect', form.data)
-
     watch(
       () => [form.errors, form.isLoading, form.isChanged, form.isDirty],
       () => {
-        // console.debug('useForm().watch -> rerender', { isLoading: form.isLoading })
         setTick(Date.now())
       },
     )

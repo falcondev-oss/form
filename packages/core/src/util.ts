@@ -44,3 +44,9 @@ export const getProperty = ((
 export function isPrimitive(value: unknown): value is string | number | boolean {
   return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
 }
+
+export function debugLog(...args: unknown[]) {
+  // eslint-disable-next-line ts/no-unsafe-member-access
+  const isDebug = !!(globalThis as any)?.__FORM_DEBUG__
+  if (isDebug) console.debug(...args)
+}

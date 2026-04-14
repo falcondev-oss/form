@@ -100,9 +100,6 @@ export class FormField<T, Schema extends FormSchema> {
 
     this.#isEditing.value = true
 
-    // console.debug(
-    //   `======== handleChange (${pathRef.value}): '${JSON.stringify(_value)}'`,
-    // )
     void this.#form.hooks.callHook(
       'beforeFieldChange',
       this.api as FormFieldInternal<unknown>,
@@ -136,7 +133,6 @@ export class FormField<T, Schema extends FormSchema> {
       return
     }
 
-    // console.debug(`======== handleBlur (${pathRef.value})`)
     if (this.#updateCount.value === 0) return
 
     void this.validate()
@@ -175,7 +171,6 @@ export class FormField<T, Schema extends FormSchema> {
     watch(
       () => this.getValue(),
       (value: T) => {
-        // console.debug(`======== fieldValue (${pathRef.value})`)
         if (this.#isEditing.value) return
 
         this.#value.value = value

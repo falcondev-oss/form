@@ -25,7 +25,7 @@ import { match, P } from 'ts-pattern'
 import { FormField } from './field'
 import { toReactive } from './reactive'
 import { extend, setContext } from './types'
-import { escapePathSegment, pathSegmentsToPathString } from './util'
+import { debugLog, escapePathSegment, pathSegmentsToPathString } from './util'
 
 type ArrayMutationMethod =
   | 'push'
@@ -51,7 +51,6 @@ export function useFormCore<
   SourceValues extends FormSourceValues<Schema> = FormSourceValues<Schema>,
   const Data extends FormData<Schema> = FormData<Schema>,
 >(formOpts: FormOptions<Schema, SourceValues>) {
-  // console.debug('useFormCore()')
   const hooks = createHooks<FormHookDefinitions<Schema>>()
   if (formOpts.hooks) hooks.addHooks(formOpts.hooks)
 
@@ -70,7 +69,7 @@ export function useFormCore<
   const formData = toReactive(formDataRef) as Data
 
   function reset() {
-    console.debug('useForm: reset()')
+    debugLog('useForm: reset()')
 
     formDataRef.value = clone(sourceValues.value ?? ({} as Data))
     formUpdateCount.value = 0
@@ -102,7 +101,7 @@ export function useFormCore<
   })
 
   const standardSchema = formOpts.schema['~standard']
-  console.debug('standardSchema', standardSchema)
+  debugLog('standardSchema', standardSchema)
 
   const zodUnrepresentableTypes: Set<$ZodTypeDef['type']> = new Set([
     'bigint',
@@ -164,7 +163,7 @@ export function useFormCore<
     )
     .otherwise(() => undefined)
 
-  console.debug('libraryOptions', libraryOptions)
+  debugLog('libraryOptions', libraryOptions)
 
   let jsonSchema: JsonSchema | undefined
   try {
@@ -206,8 +205,6 @@ export function useFormCore<
         // @ts-expect-error $fetch is a property on the array object
         if (!cachedField || !isArray<(FieldCacheItem | undefined)[]>(cachedField)) return true
 
-        // console.debug('observedFormData', { path, value, prevValue, applyData })
-
         // keep fieldCache array structure & order in sync with data to prevent wrong item cache access
         match(applyData as { name: ArrayMutationMethod; args: unknown[] } | undefined)
           .with({ name: P.union('pop', 'shift', 'reverse') }, ({ name, args }) => {
@@ -246,7 +243,6 @@ export function useFormCore<
           .with(undefined, () => {
             // property update
             deleteProperty(fieldCache, pathSegmentsToPathString(path))
-            // console.debug('fieldCache invalidate', path)
           })
           .exhaustive()
 
@@ -256,11 +252,9 @@ export function useFormCore<
   )
 
   function createFormFieldProxy(path = '', fieldOpts?: FieldOpts) {
-    // console.debug('createFormFieldProxy():', path)
     return new Proxy(Object.create(null) as BuildFormFieldAccessors<Data, false, true>, {
       ownKeys() {
         const fieldValue = getProperty(formData, path, undefined)
-        // console.debug('ownKeys():', path, fieldValue)
         return fieldValue ? Object.keys(fieldValue) : []
       },
       getOwnPropertyDescriptor(_target, _key) {
@@ -277,7 +271,6 @@ export function useFormCore<
           if (!Array.isArray(fieldValue.value)) return
 
           const iteratorPath = `${path}[Symbol.iterator]`
-          // console.debug(iteratorPath)
 
           let fields = iteratorFieldsCache.get(iteratorPath)
           if (!fields) {
@@ -330,7 +323,7 @@ export function useFormCore<
             if (cachedField) {
               field = cachedField
             } else {
-              console.debug('$use', path)
+              debugLog('$use', path)
 
               // initialize first array occurrence in path with null
               const firstArrayItemPath = path.match(/(.*\[\d+\]).*/)?.[1]
