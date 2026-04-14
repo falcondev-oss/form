@@ -40,7 +40,7 @@ export function getSchemaMeta(
 
   const { node, error } = schema.getNode(pointer)
   if (error || !node) {
-    console.warn(`Failed to get JSON Schema node for path '${pointer}':`, error)
+    debugLog(`Failed to get JSON Schema node for path '${pointer}':`, error)
     return {}
   }
 
@@ -51,7 +51,7 @@ export function getSchemaMeta(
 
   const { node: reducedNode, error: reduceError } = node.reduceNode(value)
   if (reduceError || !reducedNode) {
-    console.warn(`Failed to reduce JSON Schema node for path '${pointer}':`, reduceError)
+    debugLog(`Failed to reduce JSON Schema node for path '${pointer}':`, reduceError)
     return {}
   }
   reducedSchema = reducedNode.schema
