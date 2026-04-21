@@ -241,8 +241,8 @@ describe('field', () => {
     const nestedField = form.fields.array.at(0).name.$use()
     const ageField = form.fields.age.$use()
 
-    expect(nestedField.errors).toEqual(undefined)
-    expect(ageField.errors).toEqual(undefined)
+    expect(nestedField.errors).toBeUndefined()
+    expect(ageField.errors).toBeUndefined()
 
     await form.submit()
     expect(nestedField.errors).toEqual(['Invalid input: expected string, received null'])
@@ -252,13 +252,13 @@ describe('field', () => {
     ageField.handleChange(42)
     await Promise.resolve()
     expect(nestedField.errors).toEqual(['Invalid input: expected string, received null'])
-    expect(ageField.errors).toEqual(undefined)
+    expect(ageField.errors).toBeUndefined()
     expect(form.errors?.length).toBeDefined()
 
     form.data.array![0]!.name = 'John'
     await Promise.resolve()
-    expect(nestedField.errors).toEqual(undefined)
-    expect(ageField.errors).toEqual(undefined)
+    expect(nestedField.errors).toBeUndefined()
+    expect(ageField.errors).toBeUndefined()
     expect(form.errors).toBeUndefined()
   })
 

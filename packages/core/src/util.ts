@@ -6,19 +6,18 @@ export function pathSegmentsToPathString(
 ) {
   let path = ''
 
-  for (const [i, element] of issuePath.entries()) {
-    const p = element
+  for (const [i, segment] of issuePath.entries()) {
+    const prop = typeof segment === 'object' ? segment.key : segment
 
-    if (typeof p === 'number') {
-      path += `[${p}]`
+    if (typeof prop === 'number' || (typeof prop === 'string' && /^\d+$/.test(prop))) {
+      path += `[${prop}]`
       continue
     }
 
     // only add dot if it's not the first element & not an array index
     if (i > 0) path += '.'
 
-    if (typeof p === 'string' || typeof p === 'symbol') path += escapePathSegment(p.toString())
-    else path += escapePathSegment(p.key.toString())
+    path += escapePathSegment(prop.toString())
   }
 
   return path
