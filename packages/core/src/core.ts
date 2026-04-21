@@ -25,7 +25,7 @@ import { match, P } from 'ts-pattern'
 import { FormField } from './field'
 import { toReactive } from './reactive'
 import { extend, setContext } from './types'
-import { debugLog, escapePathSegment, pathSegmentsToPathString } from './util'
+import { debugLog, escapePathSegment, getFieldCachePath, pathSegmentsToPathString } from './util'
 
 type ArrayMutationMethod =
   | 'push'
@@ -43,7 +43,10 @@ function clone<const T>(value: T): T {
 
 // $field can be undefined if the field was never accessed via $use() directly
 // e.g. only an array item was accessed -> 'array.$field' is never set
-type FieldCacheItem = { $field: FormField<unknown, any> | undefined }
+type FieldCacheItem = {
+  $field: FormField<unknown, any> | undefined
+  _array?: (FieldCacheItem | undefined)[]
+}
 export type FieldCache = Record<string, FieldCacheItem | undefined>
 
 export function useFormCore<
@@ -190,7 +193,11 @@ export function useFormCore<
     (path, _value, _previousValue, _applyData) => {
       formUpdateCount.value++
 
-      const cachedField = getProperty(fieldCache, pathSegmentsToPathString(path), undefined)
+      const cachedField = getProperty(
+        fieldCache,
+        getFieldCachePath(pathSegmentsToPathString(path)),
+        undefined,
+      )
       void cachedField?.$field?.validate()
     },
     {
@@ -198,28 +205,32 @@ export function useFormCore<
       ignoreSymbols: true,
       ignoreKeys: ['__v_raw'],
       pathAsArray: true,
-      onValidate(path_, _value, _previousValue, applyData) {
+      onValidate(path_, value, _previousValue, applyData) {
         const path = path_ as unknown as string[] // pathAsArray: true
 
-        const cachedField = getProperty(fieldCache, pathSegmentsToPathString(path), undefined)
-        // @ts-expect-error $fetch is a property on the array object
-        if (!cachedField || !isArray<(FieldCacheItem | undefined)[]>(cachedField)) return true
+        const cachedField = getProperty(
+          fieldCache,
+          getFieldCachePath(pathSegmentsToPathString(path)),
+          undefined,
+        )
+        const array = cachedField?._array
+        if (!cachedField || !isArray(array)) return true
 
         // keep fieldCache array structure & order in sync with data to prevent wrong item cache access
         match(applyData as { name: ArrayMutationMethod; args: unknown[] } | undefined)
           .with({ name: P.union('pop', 'shift', 'reverse') }, ({ name, args }) => {
             // @ts-expect-error args can be spread
-            cachedField[name]?.(...args)
+            array[name]?.(...args)
           })
           .with({ name: 'splice' }, ({ args }) => {
             const [start, deleteCount, ...items] = args as Parameters<[]['splice']>
-            cachedField.splice(start, deleteCount, ...items.map(() => undefined))
+            array.splice(start, deleteCount, ...items.map(() => undefined))
           })
           .with({ name: 'unshift' }, () => {
-            cachedField.unshift(undefined)
+            array.unshift(undefined)
           })
           .with({ name: 'fill' }, ({ args: [_, ...args] }) => {
-            cachedField.fill(undefined, ...(args as (number | undefined)[]))
+            array.fill(undefined, ...(args as (number | undefined)[]))
           })
           .with({ name: 'sort' }, ({ args }) => {
             // setProperty(formData, path, prevValue) // onValidate runs before changes are applied
@@ -231,18 +242,18 @@ export function useFormCore<
 
             const [compareFn] = args as Parameters<Array<unknown>['sort']>
             if (!compareFn) {
-              cachedField.sort()
+              array.sort()
               formDataField.sort()
               return
             }
 
-            cachedField.sort((a, b) => compareFn(a?.$field?.api.value, b?.$field?.api.value))
+            array.sort((a, b) => compareFn(a?.$field?.api.value, b?.$field?.api.value))
             formDataField.sort(compareFn)
           })
           .with({ name: P.union('push') }, () => {}) // noop
           .with(undefined, () => {
-            // property update
-            deleteProperty(fieldCache, pathSegmentsToPathString(path))
+            // array value update
+            deleteProperty(fieldCache, getFieldCachePath(pathSegmentsToPathString(path)))
           })
           .exhaustive()
 
@@ -311,7 +322,7 @@ export function useFormCore<
 
             const index = keyPath.match(/\[(\d+)\]$/)?.[1]
             fieldValue.splice(Number(index), 1)
-            deleteProperty(fieldCache, keyPath)
+            deleteProperty(fieldCache, getFieldCachePath(keyPath))
           }
         }
 
@@ -319,7 +330,11 @@ export function useFormCore<
           return <T>($opts: FormFieldAccessorOptions<T>) => {
             let field: FormField<unknown, any>
 
-            const cachedField = getProperty(fieldCache, `${path}.$field`, undefined)
+            const cachedField = getProperty(
+              fieldCache,
+              `${getFieldCachePath(path)}.$field`,
+              undefined,
+            )
             if (cachedField) {
               field = cachedField
             } else {
@@ -339,7 +354,7 @@ export function useFormCore<
                   hooks,
                   disabled,
                   updateCount: formUpdateCount,
-                  data: formData,
+                  data: observedFormData,
                   opts: formOpts,
                   error: formError,
                   sourceValues,
@@ -360,7 +375,7 @@ export function useFormCore<
               Object.assign(field.api, formOpts[extend]?.setup?.(field.api))
               Object.assign(field.api, formOpts[extend]?.$use?.(field.api))
 
-              setProperty(fieldCache, `${path}.$field`, field)
+              setProperty(fieldCache, `${getFieldCachePath(path)}.$field`, field)
             }
 
             const discriminator = $opts?.discriminator
@@ -408,7 +423,10 @@ export function useFormCore<
     for (const issue of result.issues) {
       if (!issue.path) continue
 
-      const cachedField = getProperty(fieldCache, pathSegmentsToPathString(issue.path))?.$field
+      const cachedField = getProperty(
+        fieldCache,
+        getFieldCachePath(pathSegmentsToPathString(issue.path)),
+      )?.$field
       if (cachedField) continue
 
       console.warn('useForm: Detected validation issue in possibly unused field:', issue)
