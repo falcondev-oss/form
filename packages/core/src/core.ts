@@ -205,7 +205,7 @@ export function useFormCore<
       ignoreSymbols: true,
       ignoreKeys: ['__v_raw'],
       pathAsArray: true,
-      onValidate(path_, value, _previousValue, applyData) {
+      onValidate(path_, value, previousValue, applyData) {
         const path = path_ as unknown as string[] // pathAsArray: true
 
         const cachedField = getProperty(
@@ -354,7 +354,7 @@ export function useFormCore<
                   hooks,
                   disabled,
                   updateCount: formUpdateCount,
-                  data: observedFormData,
+                  data: formData,
                   opts: formOpts,
                   error: formError,
                   sourceValues,

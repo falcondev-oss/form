@@ -14,12 +14,12 @@ import type {
   FormSourceValues,
 } from './types'
 import { computed, reactive, ref, shallowReadonly, toRaw, toRefs, watch } from '@vue/reactivity'
-import { setProperty } from 'dot-prop'
+import { deleteProperty, setProperty } from 'dot-prop'
 import { isDeepEqual } from 'remeda'
 import { refEffect } from './reactive'
 import { getSchemaMeta } from './schema-meta'
 import { extend, setContext } from './types'
-import { getProperty, pathSegmentsToPathString } from './util'
+import { getFieldCachePath, getProperty, pathSegmentsToPathString } from './util'
 
 export type Form<Schema extends FormSchema> = {
   hooks: Hookable<FormHookDefinitions<Schema>>
@@ -110,6 +110,11 @@ export class FormField<T, Schema extends FormSchema> {
 
     // const value = $opts?.translate?.set(_value) ?? _value
     setProperty(this.#form.data, this.#context.value.path, value)
+    if (Array.isArray(value)) {
+      // reset keys for arrays
+      deleteProperty(this.#form.fieldCache, getFieldCachePath(this.#context.value.path))
+    }
+
     this.#isEditing.value = false
 
     this.#updateCount.value++

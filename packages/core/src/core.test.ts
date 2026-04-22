@@ -722,9 +722,26 @@ describe('hooks', () => {
       async submit() {},
     })
 
-    form.fields.items.at(2)?.a.$use()
+    const a2 = form.fields.items.at(2)?.a.$use()
+    const a2PrevKey = a2.key
 
     // initialize first array occurrence in path with null
     expect(form.data.items).toEqual([undefined, undefined, null])
+
+    const items = form.fields.items.$use()
+    items.handleChange([
+      { a: '1', b: 1 },
+      { a: '2', b: 2 },
+      { a: '3', b: 3 },
+    ])
+
+    // after handleChange, fieldCache is cleared
+    expect(form.fields.items.at(2)?.a.$use().key).not.toBe(a2PrevKey)
+
+    expect(form.data.items).toEqual([
+      { a: '1', b: 1 },
+      { a: '2', b: 2 },
+      { a: '3', b: 3 },
+    ])
   })
 })
