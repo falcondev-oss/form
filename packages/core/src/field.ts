@@ -53,7 +53,6 @@ function filterFieldIssues(fieldPath: string, fieldCache: FieldCache) {
 export class FormField<T, Schema extends FormSchema> {
   #form: Form<Schema>
 
-  #now = Date.now()
   #validationError = ref<StandardSchemaV1.FailureResult>()
   #errors = refEffect(this.#transformValidationError.bind(this))
   #transformValidationError() {
@@ -215,7 +214,9 @@ export class FormField<T, Schema extends FormSchema> {
       isPending: form.isPending,
       value: shallowReadonly(this.#value) as Ref<T>,
       path,
-      key: `${path}@${this.#now}`,
+      key: `${path}@${new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: 'numeric', fractionalSecondDigits: 2, hour12: false })}-${Math.random()
+        .toString(36)
+        .slice(2)}`,
       [setContext]: this.#setContext.bind(this),
     })
     this.api = api satisfies FormFieldInternal<T>
