@@ -340,14 +340,6 @@ export function useFormCore<
             } else {
               debugLog('$use', path)
 
-              // initialize first array occurrence in path with null
-              const firstArrayItemPath = path.match(/(.*\[\d+\]).*/)?.[1]
-              if (firstArrayItemPath) {
-                const nothing = Symbol('nothing')
-                const value = getProperty(formData, firstArrayItemPath, nothing)
-                if (value === nothing) setProperty(formData, firstArrayItemPath, null)
-              }
-
               field = new FormField(
                 path,
                 {

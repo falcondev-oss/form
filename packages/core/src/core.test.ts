@@ -725,8 +725,8 @@ describe('hooks', () => {
     const a2 = form.fields.items.at(2)?.a.$use()
     const a2PrevKey = a2.key
 
-    // initialize first array occurrence in path with null
-    expect(form.data.items).toEqual([undefined, undefined, null])
+    expect(a2.value).toBeNull()
+    expect(form.data.items).toEqual([])
 
     const items = form.fields.items.$use()
     items.handleChange([
@@ -734,6 +734,7 @@ describe('hooks', () => {
       { a: '2', b: 2 },
       { a: '3', b: 3 },
     ])
+    expect(a2.value).toBe('3')
 
     // after handleChange, fieldCache is cleared
     expect(form.fields.items.at(2)?.a.$use().key).not.toBe(a2PrevKey)
