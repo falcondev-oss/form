@@ -262,6 +262,30 @@ describe('field', () => {
     expect(form.errors).toBeUndefined()
   })
 
+  test('error resets if no global form errors', async () => {
+    const form = useFormCore({
+      schema: z.object({
+        name: z.number().nullable(),
+      }),
+      sourceValues: {
+        name: null,
+      },
+      async submit() {},
+    })
+
+    const field = form.fields.name.$use()
+
+    field.handleChange('' as never)
+    field.handleBlur()
+    await Promise.resolve()
+    expect(field.errors).toBeDefined()
+
+    field.handleChange(0)
+    field.handleBlur()
+    await Promise.resolve()
+    expect(field.errors).toBeUndefined()
+  })
+
   test('translate', async () => {
     const form = useFormCore({
       schema: z.object({

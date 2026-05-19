@@ -77,6 +77,9 @@ export class FormField<T, Schema extends FormSchema> {
     )
     if (!formResult.issues) {
       this.#form.error.value = undefined
+      // manually update field validation errors
+      // the watcher in constructor only works for this case if the form error is already set, doesn't work if form error already is undefined (since no change)
+      this.#validationError.value = undefined
       return
     }
 
@@ -186,6 +189,7 @@ export class FormField<T, Schema extends FormSchema> {
       if (form.updateCount.value === 0) this.#updateCount.value = 0
     })
     watch(form.error, () => {
+      console.log('form error changed', form.error.value)
       this.#validationError.value = form.error.value
         ? ({
             issues: form.error.value.issues.filter(
