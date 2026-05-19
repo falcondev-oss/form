@@ -10,6 +10,7 @@ const form = useForm({
     date: new Date(),
   },
   async submit({ values }) {
+    // eslint-disable-next-line no-console
     console.log('Submitted', values)
   },
 })

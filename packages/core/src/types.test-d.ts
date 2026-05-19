@@ -1,3 +1,4 @@
+/* eslint-disable ts/no-unnecessary-type-assertion */
 import type { UnionToTuple } from 'type-fest'
 import type {
   BuildFormFieldAccessors,

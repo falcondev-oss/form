@@ -189,7 +189,6 @@ export class FormField<T, Schema extends FormSchema> {
       if (form.updateCount.value === 0) this.#updateCount.value = 0
     })
     watch(form.error, () => {
-      console.log('form error changed', form.error.value)
       this.#validationError.value = form.error.value
         ? ({
             issues: form.error.value.issues.filter(
