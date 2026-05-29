@@ -768,5 +768,15 @@ describe('hooks', () => {
       { a: '2', b: 2 },
       { a: '3', b: 3 },
     ])
+
+    expect(() => form.fields.items.delete(form.fields.items.at(2).a.$use().key)).toThrow(
+      'Key does not reference an array item',
+    )
+
+    form.fields.items.delete(form.fields.items.at(2).$use().key)
+    expect(form.data.items).toEqual([
+      { a: '1', b: 1 },
+      { a: '2', b: 2 },
+    ])
   })
 })

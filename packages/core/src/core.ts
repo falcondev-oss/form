@@ -316,11 +316,14 @@ export function useFormCore<
             const fieldValue = getProperty(formData, path, []) as unknown[] | null
             if (!fieldValue) throw new Error("Can't delete item when field is null")
 
-            const keyPath = key.match(/(.*)@\d+$/)?.[1]
+            // const keyPath = key.match(/(.*)@\d+$/)?.[1]
+            const keyPath = key.match(/(.*)@[^@]+$/)?.[1]
             if (!keyPath) throw new Error('Invalid key')
-            if (!keyPath.startsWith(path)) throw new Error('Key does not reference an array item')
 
             const index = keyPath.match(/\[(\d+)\]$/)?.[1]
+            if (!keyPath.startsWith(path) || index === undefined)
+              throw new Error('Key does not reference an array item')
+
             fieldValue.splice(Number(index), 1)
             deleteProperty(fieldCache, getFieldCachePath(keyPath))
           }
