@@ -1,0 +1,429 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`navigator golden snapshot (all enumerated paths) > arktype: dynamic form (TextInput + NumberInput + Table) 1`] = `
+{
+  "id": {
+    "required": true,
+  },
+  "isTemplate": {
+    "required": true,
+  },
+  "name": {
+    "required": false,
+  },
+  "sections": {
+    "required": true,
+  },
+  "sections[0]": {
+    "required": false,
+  },
+  "sections[0].fields": {
+    "required": true,
+  },
+  "sections[0].fields[0]": {
+    "required": false,
+  },
+  "sections[0].fields[0].component": {
+    "required": true,
+  },
+  "sections[0].fields[0].name": {
+    "required": true,
+  },
+  "sections[0].fields[0].value": {
+    "maxLength": 50,
+    "required": false,
+  },
+  "sections[0].fields[1]": {
+    "required": false,
+  },
+  "sections[0].fields[1].component": {
+    "required": true,
+  },
+  "sections[0].fields[1].name": {
+    "required": true,
+  },
+  "sections[0].fields[1].value": {
+    "maximum": 999,
+    "minimum": 0,
+    "required": false,
+  },
+  "sections[0].fields[2]": {
+    "required": false,
+  },
+  "sections[0].fields[2].columns": {
+    "required": true,
+  },
+  "sections[0].fields[2].columns[0]": {
+    "required": false,
+  },
+  "sections[0].fields[2].columns[0].id": {
+    "required": true,
+  },
+  "sections[0].fields[2].columns[0].value": {
+    "required": true,
+  },
+  "sections[0].fields[2].columns[0].value[0]": {
+    "required": false,
+  },
+  "sections[0].fields[2].component": {
+    "required": true,
+  },
+  "sections[0].fields[2].name": {
+    "required": true,
+  },
+  "sections[0].name": {
+    "required": true,
+  },
+}
+`;
+
+exports[`navigator golden snapshot (all enumerated paths) > arktype: flat scalars (bounds, nullable, optional, enum, date) 1`] = `
+{
+  "color": {
+    "required": true,
+  },
+  "count": {
+    "maximum": 10,
+    "minimum": 1,
+    "required": true,
+  },
+  "flag": {
+    "required": true,
+  },
+  "maybe": {
+    "required": false,
+  },
+  "opt": {
+    "required": false,
+  },
+  "title": {
+    "maxLength": 20,
+    "minLength": 2,
+    "required": true,
+  },
+  "when": {
+    "required": true,
+  },
+}
+`;
+
+exports[`navigator golden snapshot (all enumerated paths) > zod: deep nested objects 1`] = `
+{
+  "a": {
+    "required": true,
+  },
+  "a.b": {
+    "required": true,
+  },
+  "a.b.c": {
+    "required": true,
+  },
+  "a.b.c.d": {
+    "description": "deep",
+    "maxLength": 4,
+    "required": true,
+  },
+}
+`;
+
+exports[`navigator golden snapshot (all enumerated paths) > zod: discriminated union array, both branches + deep leaf 1`] = `
+{
+  "items": {
+    "required": true,
+  },
+  "items[0]": {
+    "required": false,
+  },
+  "items[0].component": {
+    "required": true,
+  },
+  "items[0].name": {
+    "required": true,
+  },
+  "items[0].value": {
+    "maxLength": 50,
+    "required": false,
+  },
+  "items[1]": {
+    "required": false,
+  },
+  "items[1].component": {
+    "required": true,
+  },
+  "items[1].name": {
+    "required": true,
+  },
+  "items[1].value": {
+    "maximum": 999,
+    "minimum": 0,
+    "required": false,
+  },
+  "items[2]": {
+    "required": false,
+  },
+  "items[2].columns": {
+    "required": true,
+  },
+  "items[2].columns[0]": {
+    "required": false,
+  },
+  "items[2].columns[0].id": {
+    "required": true,
+  },
+  "items[2].columns[0].value": {
+    "required": true,
+  },
+  "items[2].columns[0].value[0]": {
+    "maxLength": 10,
+    "required": false,
+  },
+  "items[2].component": {
+    "required": true,
+  },
+  "items[2].name": {
+    "required": true,
+  },
+}
+`;
+
+exports[`navigator golden snapshot (all enumerated paths) > zod: dynamic form (TextInput + NumberInput + Table) 1`] = `
+{
+  "id": {
+    "required": true,
+  },
+  "isTemplate": {
+    "required": true,
+  },
+  "name": {
+    "required": false,
+  },
+  "sections": {
+    "required": true,
+  },
+  "sections[0]": {
+    "required": false,
+  },
+  "sections[0].fields": {
+    "required": true,
+  },
+  "sections[0].fields[0]": {
+    "required": false,
+  },
+  "sections[0].fields[0].component": {
+    "required": true,
+  },
+  "sections[0].fields[0].name": {
+    "required": true,
+  },
+  "sections[0].fields[0].value": {
+    "maxLength": 50,
+    "required": false,
+  },
+  "sections[0].fields[1]": {
+    "required": false,
+  },
+  "sections[0].fields[1].component": {
+    "required": true,
+  },
+  "sections[0].fields[1].name": {
+    "required": true,
+  },
+  "sections[0].fields[1].value": {
+    "maximum": 999,
+    "minimum": 0,
+    "required": false,
+  },
+  "sections[0].fields[2]": {
+    "required": false,
+  },
+  "sections[0].fields[2].columns": {
+    "required": true,
+  },
+  "sections[0].fields[2].columns[0]": {
+    "required": false,
+  },
+  "sections[0].fields[2].columns[0].id": {
+    "required": true,
+  },
+  "sections[0].fields[2].columns[0].value": {
+    "required": true,
+  },
+  "sections[0].fields[2].columns[0].value[0]": {
+    "maxLength": 10,
+    "required": false,
+  },
+  "sections[0].fields[2].columns[0].value[1]": {
+    "maxLength": 10,
+    "required": false,
+  },
+  "sections[0].fields[2].component": {
+    "required": true,
+  },
+  "sections[0].fields[2].name": {
+    "required": true,
+  },
+  "sections[0].name": {
+    "required": true,
+  },
+}
+`;
+
+exports[`navigator golden snapshot (all enumerated paths) > zod: flat scalars (min/max, nullable, optional, enum, int, date) 1`] = `
+{
+  "color": {
+    "required": true,
+  },
+  "count": {
+    "maximum": 10,
+    "minimum": 1,
+    "required": true,
+  },
+  "flag": {
+    "required": true,
+  },
+  "maybe": {
+    "required": false,
+  },
+  "opt": {
+    "required": false,
+  },
+  "ratio": {
+    "maximum": 1,
+    "minimum": 0,
+    "required": true,
+  },
+  "title": {
+    "description": "the title",
+    "maxLength": 20,
+    "minLength": 2,
+    "required": true,
+  },
+  "when": {
+    "required": true,
+  },
+}
+`;
+
+exports[`navigator golden snapshot (all enumerated paths) > zod: nested arrays of scalars 1`] = `
+{
+  "matrix": {
+    "required": true,
+  },
+  "matrix[0]": {
+    "required": false,
+  },
+  "matrix[0][0]": {
+    "maximum": 9,
+    "required": false,
+  },
+  "matrix[0][1]": {
+    "maximum": 9,
+    "required": false,
+  },
+  "matrix[1]": {
+    "required": false,
+  },
+  "matrix[1][0]": {
+    "maximum": 9,
+    "required": false,
+  },
+}
+`;
+
+exports[`navigator golden snapshot (all enumerated paths) > zod: nullable string present and absent 1`] = `
+{
+  "a": {
+    "maxLength": 5,
+    "required": false,
+  },
+  "b": {
+    "maxLength": 5,
+    "required": false,
+  },
+}
+`;
+
+exports[`navigator golden snapshot (all enumerated paths) > zod: nullable string with wrapper description 1`] = `
+{
+  "note": {
+    "description": "a note",
+    "maxLength": 20,
+    "required": false,
+  },
+  "score": {
+    "maximum": 5,
+    "minimum": 1,
+    "required": false,
+  },
+}
+`;
+
+exports[`navigator golden snapshot (all enumerated paths) > zod: record (additionalProperties schema) 1`] = `
+{
+  "meta": {
+    "required": true,
+  },
+  "meta.k1": {
+    "maxLength": 8,
+    "required": false,
+  },
+  "meta.k2": {
+    "maxLength": 8,
+    "required": false,
+  },
+}
+`;
+
+exports[`navigator golden snapshot (all enumerated paths) > zod: rest tuple (additionalItems) 1`] = `
+{
+  "t": {
+    "required": true,
+  },
+  "t[0]": {
+    "maxLength": 3,
+    "required": false,
+  },
+  "t[1]": {
+    "minimum": 0,
+    "required": false,
+  },
+  "t[2]": {
+    "minimum": 0,
+    "required": false,
+  },
+}
+`;
+
+exports[`navigator golden snapshot (all enumerated paths) > zod: tuple 1`] = `
+{
+  "pair": {
+    "required": true,
+  },
+  "pair[0]": {
+    "maxLength": 3,
+    "required": false,
+  },
+  "pair[1]": {
+    "maximum": 9,
+    "required": false,
+  },
+}
+`;
+
+exports[`navigator golden snapshot (all enumerated paths) > zod: union mid-edit (discriminator set, value null) 1`] = `
+{
+  "f": {
+    "required": true,
+  },
+  "f.component": {
+    "required": true,
+  },
+  "f.name": {
+    "required": true,
+  },
+  "f.value": {
+    "maxLength": 50,
+    "required": false,
+  },
+}
+`;

@@ -1,7 +1,7 @@
 import type { ToJsonSchema } from '@ark/schema'
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type { ComputedRef, Ref } from '@vue/reactivity'
-import type { JsonSchema } from 'json-schema-library'
+import type { JSONSchema7 } from 'json-schema'
 import type { $ZodTypeDef, ToJSONSchemaParams } from 'zod/v4/core'
 import type { FieldOpts } from './field'
 import type {
@@ -168,7 +168,7 @@ export function useFormCore<
 
   debugLog(() => ['libraryOptions', libraryOptions])
 
-  let jsonSchema: JsonSchema | undefined
+  let jsonSchema: JSONSchema7 | undefined
   try {
     jsonSchema = standardSchema.jsonSchema.input({
       target: 'draft-07',

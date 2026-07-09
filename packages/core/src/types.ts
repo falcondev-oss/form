@@ -27,10 +27,6 @@ export interface StandardSchemasSpec<Input = unknown, Output = Input> {
   '~standard': StandardSchemasProps<Input, Output>
 }
 
-declare module 'json-schema-library' {
-  interface JsonSchema extends JSONSchema7 {}
-}
-
 type ObjectHasFunctionsOrSymbols<T> =
   IsAny<T[keyof T]> extends true
     ? false

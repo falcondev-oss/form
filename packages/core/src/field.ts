@@ -1,7 +1,7 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type { ComputedRef, Ref } from '@vue/reactivity'
 import type { Hookable } from 'hookable'
-import type { JsonSchema } from 'json-schema-library'
+import type { JSONSchema7 } from 'json-schema'
 import type { FieldCache } from './core'
 import type {
   FormData,
@@ -32,7 +32,7 @@ export type Form<Schema extends FormSchema> = {
   isLoading: Ref<boolean>
   isPending: Ref<boolean>
   fieldCache: FieldCache
-  jsonSchema: JsonSchema | undefined
+  jsonSchema: JSONSchema7 | undefined
 }
 
 export type FieldOpts = { discriminator?: string }
