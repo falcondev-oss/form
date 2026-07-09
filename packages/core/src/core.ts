@@ -72,7 +72,7 @@ export function useFormCore<
   const formData = toReactive(formDataRef) as Data
 
   function reset() {
-    debugLog('useForm: reset()')
+    debugLog(() => ['useForm: reset()'])
 
     formDataRef.value = clone(sourceValues.value ?? ({} as Data))
     formUpdateCount.value = 0
@@ -104,7 +104,7 @@ export function useFormCore<
   })
 
   const standardSchema = formOpts.schema['~standard']
-  debugLog('standardSchema', standardSchema)
+  debugLog(() => ['standardSchema', standardSchema])
 
   const zodUnrepresentableTypes: Set<$ZodTypeDef['type']> = new Set([
     'bigint',
@@ -166,7 +166,7 @@ export function useFormCore<
     )
     .otherwise(() => undefined)
 
-  debugLog('libraryOptions', libraryOptions)
+  debugLog(() => ['libraryOptions', libraryOptions])
 
   let jsonSchema: JsonSchema | undefined
   try {
@@ -341,7 +341,7 @@ export function useFormCore<
             if (cachedField) {
               field = cachedField
             } else {
-              debugLog('$use', path)
+              debugLog(() => ['$use', path])
 
               field = new FormField(
                 path,

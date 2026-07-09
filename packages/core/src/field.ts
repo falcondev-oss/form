@@ -185,9 +185,12 @@ export class FormField<T, Schema extends FormSchema> {
       { immediate: true },
     )
 
-    watch(form.updateCount, () => {
-      if (form.updateCount.value === 0) this.#updateCount.value = 0
-    })
+    watch(
+      () => form.updateCount.value === 0,
+      (isPristine) => {
+        if (isPristine) this.#updateCount.value = 0
+      },
+    )
     watch(form.error, () => {
       this.#validationError.value = form.error.value
         ? ({
