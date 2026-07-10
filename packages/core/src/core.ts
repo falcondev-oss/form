@@ -3,7 +3,6 @@ import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type { ComputedRef, Ref } from '@vue/reactivity'
 import type { JSONSchema7 } from 'json-schema'
 import type { $ZodTypeDef, ToJSONSchemaParams } from 'zod/v4/core'
-import type { FieldOpts } from './field'
 import type {
   BuildFormFieldAccessors,
   FormData,
@@ -262,7 +261,7 @@ export function useFormCore<
     },
   )
 
-  function createFormFieldProxy(path = '', fieldOpts?: FieldOpts) {
+  function createFormFieldProxy(path = '') {
     return new Proxy(Object.create(null) as BuildFormFieldAccessors<Data, false, true>, {
       ownKeys() {
         const fieldValue = getProperty(formData, path, undefined)
@@ -343,23 +342,19 @@ export function useFormCore<
             } else {
               debugLog(() => ['$use', path])
 
-              field = new FormField(
-                path,
-                {
-                  hooks,
-                  disabled,
-                  updateCount: formUpdateCount,
-                  data: formData,
-                  opts: formOpts,
-                  error: formError,
-                  sourceValues,
-                  isLoading,
-                  isPending,
-                  fieldCache,
-                  jsonSchema,
-                },
-                fieldOpts,
-              )
+              field = new FormField(path, {
+                hooks,
+                disabled,
+                updateCount: formUpdateCount,
+                data: formData,
+                opts: formOpts,
+                error: formError,
+                sourceValues,
+                isLoading,
+                isPending,
+                fieldCache,
+                jsonSchema,
+              })
 
               Object.defineProperty(field.api, '$', {
                 get() {
@@ -380,7 +375,7 @@ export function useFormCore<
                   () =>
                     (field.api.value as Record<string, unknown> | null)?.[discriminator] ?? null,
                 ),
-                $field: computed(() => createFormFieldProxy(field.api.path, { discriminator })),
+                $field: computed(() => createFormFieldProxy(field.api.path)),
               })
             }
 

@@ -6,7 +6,7 @@ import {
   resetUnsupportedConstructs,
   unsupportedConstructs,
 } from './schema-navigator'
-import { genJsonSchema } from './schema-navigator.fixtures'
+import { genJsonSchema } from './schema-navigator.test-helpers'
 
 // A deliberately messy, generically-named form-builder union that exercises the hard
 // shapes a real arktype scope produces: a many-branch discriminated union, and a

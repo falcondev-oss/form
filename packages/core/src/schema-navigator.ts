@@ -281,12 +281,7 @@ function walk(root: Schema, segments: Segment[], data: unknown, path: string) {
   return { node, parent, value: curValue }
 }
 
-export function getSchemaMeta(
-  jsonSchema: JSONSchema7,
-  data: object,
-  path: string,
-  _fieldOpts?: unknown,
-): SchemaMeta {
+export function getSchemaMeta(jsonSchema: JSONSchema7, data: object, path: string): SchemaMeta {
   const segments = parsePath(path)
   const walked = walk(jsonSchema, segments, data, path)
   if (!walked) return {}
