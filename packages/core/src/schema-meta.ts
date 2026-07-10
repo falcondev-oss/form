@@ -32,35 +32,38 @@ export function getSchemaMeta(
 ): SchemaMeta {
   const pointer = `#/${path.replaceAll('[', '.').replaceAll(']', '').split('.').join('/')}`
   const schema = compileSchema(jsonSchema)
-  debugLog('getSchemaMeta', {
-    schema,
-    pointer,
-    data: JSON.stringify(data),
-  })
+  debugLog(() => [
+    'getSchemaMeta',
+    {
+      schema,
+      pointer,
+      data: JSON.stringify(data),
+    },
+  ])
 
   const { node, error } = schema.getNode(pointer)
   if (error || !node) {
-    debugLog(`Failed to get JSON Schema node for path '${pointer}':`, error)
+    debugLog(() => [`Failed to get JSON Schema node for path '${pointer}':`, error])
     return {}
   }
 
   let reducedSchema: JsonSchema | undefined = node.schema
 
   const value = getProperty(data, path)
-  debugLog('value', { value, schema: node.schema })
+  debugLog(() => ['value', { value, schema: node.schema }])
 
   const { node: reducedNode, error: reduceError } = node.reduceNode(value)
   if (reduceError || !reducedNode) {
-    debugLog(`Failed to reduce JSON Schema node for path '${pointer}':`, reduceError)
+    debugLog(() => [`Failed to reduce JSON Schema node for path '${pointer}':`, reduceError])
     return {}
   }
   reducedSchema = reducedNode.schema
-  debugLog('reducedSchema', reducedSchema)
+  debugLog(() => ['reducedSchema', reducedSchema])
 
   if (R.isEmpty(R.pick(reducedSchema, contraints)) && (node.anyOf || node.oneOf)) {
     const matchingBranch = getMatchingBranch(node.schema, value)
 
-    debugLog('fallback reducedSchema', matchingBranch, node.schema)
+    debugLog(() => ['fallback reducedSchema', matchingBranch, node.schema])
 
     reducedSchema = matchingBranch
   }
@@ -90,7 +93,7 @@ export function getSchemaMeta(
 }
 
 function getMatchingBranch(schema: JsonSchema, value: unknown): JsonSchema | undefined {
-  debugLog('getMatchingBranch', { schema, value })
+  debugLog(() => ['getMatchingBranch', { schema, value }])
   if (!schema.anyOf && !schema.oneOf) return schema
 
   const of = schema.anyOf ? 'anyOf' : 'oneOf'
@@ -110,7 +113,7 @@ function getMatchingBranch(schema: JsonSchema, value: unknown): JsonSchema | und
   // append branch-shared metadata
   Object.assign(matchingBranch ?? {}, R.pickBy(schema, isPrimitive))
 
-  debugLog('matchingBranch', matchingBranch)
+  debugLog(() => ['matchingBranch', matchingBranch])
   return matchingBranch
 }
 
