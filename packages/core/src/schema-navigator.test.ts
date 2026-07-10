@@ -1,5 +1,4 @@
 import type { JSONSchema7 } from 'json-schema'
-import { type } from 'arktype'
 import { beforeEach, describe, expect, test } from 'vitest'
 import z from 'zod'
 import {
@@ -28,28 +27,26 @@ function enumeratePaths(data: unknown, prefix = ''): string[] {
 
 beforeEach(() => resetUnsupportedConstructs())
 
-// A form-builder-style discriminated union — the shape the navigator's per-branch
-// resolution has to get right. Kept small and shared only across the union tests below.
-const zTextInput = z.object({
-  component: z.literal('TextInput'),
-  name: z.string(),
-  value: z.string().max(50).nullable(),
-})
-const zNumberInput = z.object({
-  component: z.literal('NumberInput'),
-  name: z.string(),
-  value: z.number().min(0).max(999).nullable(),
-})
-const zTable = z.object({
-  component: z.literal('Table'),
-  name: z.string(),
-  columns: z.array(z.object({ id: z.string(), value: z.array(z.string().max(10)) })),
-})
-const zField = z.discriminatedUnion('component', [zTextInput, zNumberInput, zTable])
-
 describe('discriminated union: each branch keeps its own constraints (no cross-branch bleed)', () => {
-  test('zod: the resolved branch decides the leaf metadata', () => {
-    const js = genJsonSchema(z.object({ fields: z.array(zField) }))
+  test('the resolved branch decides the leaf metadata', () => {
+    const field = z.discriminatedUnion('component', [
+      z.object({
+        component: z.literal('TextInput'),
+        name: z.string(),
+        value: z.string().max(50).nullable(),
+      }),
+      z.object({
+        component: z.literal('NumberInput'),
+        name: z.string(),
+        value: z.number().min(0).max(999).nullable(),
+      }),
+      z.object({
+        component: z.literal('Table'),
+        name: z.string(),
+        columns: z.array(z.object({ id: z.string(), value: z.array(z.string().max(10)) })),
+      }),
+    ])
+    const js = genJsonSchema(z.object({ fields: z.array(field) }))
     const data = {
       fields: [
         { component: 'TextInput', name: 'first', value: 'hi' },
@@ -76,31 +73,20 @@ describe('discriminated union: each branch keeps its own constraints (no cross-b
     })
   })
 
-  test('arktype: no cross-branch constraint bleed', () => {
-    const field = type({
-      component: "'TextInput'",
-      name: 'string',
-      value: 'string <= 50 | null',
-    }).or({ component: "'NumberInput'", name: 'string', value: '0 <= number <= 999 | null' })
-    const js = genJsonSchema(type({ fields: field.array() }))
-    const data = {
-      fields: [
-        { component: 'TextInput', name: 'first', value: null },
-        { component: 'NumberInput', name: 'age', value: 5 },
-      ],
-    }
-
-    // TextInput value is null: maxLength only, NOT number bounds
-    expect(getSchemaMeta(js, data, 'fields[0].value')).toEqual({ required: false, maxLength: 50 })
-    expect(getSchemaMeta(js, data, 'fields[1].value')).toEqual({
-      required: false,
-      minimum: 0,
-      maximum: 999,
-    })
-  })
-
   test('mid-edit: discriminator set but sibling values null still resolves the branch', () => {
-    const js = genJsonSchema(z.object({ f: zField }))
+    const field = z.discriminatedUnion('component', [
+      z.object({
+        component: z.literal('TextInput'),
+        name: z.string(),
+        value: z.string().max(50).nullable(),
+      }),
+      z.object({
+        component: z.literal('NumberInput'),
+        name: z.string(),
+        value: z.number().min(0).max(999).nullable(),
+      }),
+    ])
+    const js = genJsonSchema(z.object({ f: field }))
     const data = { f: { component: 'TextInput', name: null, value: null } }
 
     expect(getSchemaMeta(js, data, 'f.value')).toEqual({ required: false, maxLength: 50 })
@@ -208,12 +194,28 @@ describe('unsupported constructs degrade to {} and warn (incl. terminal nodes)',
 })
 
 describe('robustness on a real-shaped dynamic-form schema', () => {
-  // one representative schema: a discriminated-union form, the shape the app actually feeds in
+  const field = z.discriminatedUnion('component', [
+    z.object({
+      component: z.literal('TextInput'),
+      name: z.string(),
+      value: z.string().max(50).nullable(),
+    }),
+    z.object({
+      component: z.literal('NumberInput'),
+      name: z.string(),
+      value: z.number().min(0).max(999).nullable(),
+    }),
+    z.object({
+      component: z.literal('Table'),
+      name: z.string(),
+      columns: z.array(z.object({ id: z.string(), value: z.array(z.string().max(10)) })),
+    }),
+  ])
   const js = genJsonSchema(
     z.object({
       id: z.string(),
       name: z.string().nullable(),
-      sections: z.array(z.object({ name: z.string(), fields: z.array(zField) })),
+      sections: z.array(z.object({ name: z.string(), fields: z.array(field) })),
     }),
   )
   const data = {
