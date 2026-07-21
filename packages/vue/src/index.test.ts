@@ -67,4 +67,27 @@ describe('vue', () => {
     expect(field.value).toEqual(new Date('2002-01-01'))
     expect(field.model).toEqual(new Date('2002-01-01'))
   })
+
+  test('model returns raw host objects (File)', () => {
+    const form = useForm({
+      schema: z.object({
+        file: z.instanceof(File).nullable(),
+      }),
+      sourceValues: {
+        file: null,
+      },
+      async submit() {},
+    })
+
+    const file = new File(['hello'], 'greeting.txt', { type: 'text/plain' })
+    const field = form.fields.file.$use()
+    field.model = file
+
+    // model must expose the raw File with working native getters, not a proxy
+    expect(field.model).toBe(file)
+    expect(field.model?.name).toBe('greeting.txt')
+    expect(field.model?.size).toBe(5)
+    expect(form.data.file).toBe(file)
+    expect(form.data.file?.type).toBe('text/plain')
+  })
 })

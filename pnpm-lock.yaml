@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  on-change: e6b60761e56ff8f6e765b3fa6ff6065373842204a4210cfe17568bf37e6d584c
+
 importers:
 
   .:
@@ -52,7 +55,7 @@ importers:
         version: 2.0.6
       on-change:
         specifier: ^6.0.2
-        version: 6.0.2
+        version: 6.0.2(patch_hash=e6b60761e56ff8f6e765b3fa6ff6065373842204a4210cfe17568bf37e6d584c)
       remeda:
         specifier: ^2.34.1
         version: 2.34.1
@@ -7513,7 +7516,7 @@ snapshots:
 
   ohash@2.0.11: {}
 
-  on-change@6.0.2: {}
+  on-change@6.0.2(patch_hash=e6b60761e56ff8f6e765b3fa6ff6065373842204a4210cfe17568bf37e6d584c): {}
 
   open@10.2.0:
     dependencies:
