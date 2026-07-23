@@ -6,6 +6,15 @@ import z from 'zod'
 import { useFormCore } from './core'
 import { sleep } from './util'
 
+declare module './types' {
+  interface Register {
+    events: {
+      toForm: { submitted: { id: number }; ping: void }
+      toField: { highlight: { color: string } }
+    }
+  }
+}
+
 describe('form', () => {
   describe('isChanged', () => {
     test('default', () => {
@@ -778,5 +787,80 @@ describe('hooks', () => {
       { a: '1', b: 1 },
       { a: '2', b: 2 },
     ])
+  })
+})
+
+function createEventsForm() {
+  return useFormCore({
+    schema: z.object({ a: z.string(), b: z.string() }),
+    sourceValues: { a: '', b: '' },
+    async submit() {},
+  })
+}
+
+describe('events', () => {
+  test('field -> form (with sender field)', async () => {
+    const form = createEventsForm()
+    const field = form.fields.a.$use()
+    const spy = vi.fn()
+
+    form.events.hook('submitted', spy)
+    await field.events.callHook('submitted', { id: 1 })
+
+    expect(spy).toHaveBeenCalledOnce()
+    expect(spy).toHaveBeenCalledWith({ id: 1 }, field)
+  })
+
+  test('form -> field', async () => {
+    const form = createEventsForm()
+    const field = form.fields.a.$use()
+    const spy = vi.fn()
+
+    field.events.hook('highlight', spy)
+    await form.events.callHook('highlight', { color: 'red' })
+
+    expect(spy).toHaveBeenCalledOnce()
+    expect(spy).toHaveBeenCalledWith({ color: 'red' })
+  })
+
+  test('form -> field broadcasts to every field listener', async () => {
+    const form = createEventsForm()
+    const spyA = vi.fn()
+    const spyB = vi.fn()
+
+    form.fields.a.$use().events.hook('highlight', spyA)
+    form.fields.b.$use().events.hook('highlight', spyB)
+    await form.events.callHook('highlight', { color: 'blue' })
+
+    expect(spyA).toHaveBeenCalledOnce()
+    expect(spyB).toHaveBeenCalledOnce()
+  })
+
+  test('void payload', async () => {
+    const form = createEventsForm()
+    const field = form.fields.a.$use()
+    const spy = vi.fn()
+
+    form.events.hook('ping', spy)
+    await field.events.callHook('ping')
+
+    expect(spy).toHaveBeenCalledOnce()
+  })
+
+  test('directions are isolated', async () => {
+    const form = createEventsForm()
+    const field = form.fields.a.$use()
+    const toFormSpy = vi.fn()
+    const toFieldSpy = vi.fn()
+
+    form.events.hook('submitted', toFormSpy)
+    field.events.hook('highlight', toFieldSpy)
+
+    // emitting field -> form must not reach the form -> field listener, and vice versa
+    await field.events.callHook('submitted', { id: 1 })
+    expect(toFieldSpy).not.toHaveBeenCalled()
+
+    await form.events.callHook('highlight', { color: 'red' })
+    expect(toFormSpy).toHaveBeenCalledOnce()
   })
 })

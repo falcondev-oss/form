@@ -4,6 +4,7 @@ import type { Hookable } from 'hookable'
 import type { JsonSchema } from 'json-schema-library'
 import type { FieldCache } from './core'
 import type {
+  FieldEvents,
   FormData,
   FormFieldContext,
   FormFieldInternal,
@@ -13,7 +14,16 @@ import type {
   FormSchema,
   FormSourceValues,
 } from './types'
-import { computed, reactive, ref, shallowReadonly, toRaw, toRefs, watch } from '@vue/reactivity'
+import {
+  computed,
+  markRaw,
+  reactive,
+  ref,
+  shallowReadonly,
+  toRaw,
+  toRefs,
+  watch,
+} from '@vue/reactivity'
 import { deleteProperty, setProperty } from 'dot-prop'
 import { isDeepEqual } from 'remeda'
 import { refEffect } from './reactive'
@@ -23,6 +33,7 @@ import { getFieldCachePath, getProperty, pathSegmentsToPathString } from './util
 
 export type Form<Schema extends FormSchema> = {
   hooks: Hookable<FormHookDefinitions<Schema>>
+  events: Hookable
   disabled: Ref<boolean>
   updateCount: Ref<number>
   data: FormData<Schema>
@@ -209,6 +220,15 @@ export class FormField<T, Schema extends FormSchema> {
     )
 
     const api = reactive({
+      events: markRaw({
+        hook: (name: string, fn: (...args: unknown[]) => void | Promise<void>) =>
+          form.events.hook(`toField:${name}`, fn),
+        hookOnce: (name: string, fn: (...args: unknown[]) => void | Promise<void>) =>
+          form.events.hookOnce(`toField:${name}`, fn),
+        callHook: async (name: string, payload?: unknown) => {
+          await form.events.callHook(`toForm:${name}`, payload, this.api)
+        },
+      }) as unknown as FieldEvents,
       disabled: form.disabled,
       errors: this.#errors,
       schema: schemaMeta,

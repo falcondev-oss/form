@@ -7,6 +7,7 @@ import type { FieldOpts } from './field'
 import type {
   BuildFormFieldAccessors,
   FormData,
+  FormEvents,
   FormFieldAccessorOptions,
   FormHandle,
   FormHookDefinitions,
@@ -56,6 +57,8 @@ export function useFormCore<
 >(formOpts: FormOptions<Schema, SourceValues>) {
   const hooks = createHooks<FormHookDefinitions<Schema>>()
   if (formOpts.hooks) hooks.addHooks(formOpts.hooks)
+
+  const events = createHooks()
 
   const sourceValues = computed(() => toValue(formOpts.sourceValues)) as ComputedRef<
     Data | undefined
@@ -347,6 +350,7 @@ export function useFormCore<
                 path,
                 {
                   hooks,
+                  events,
                   disabled,
                   updateCount: formUpdateCount,
                   data: formData,
@@ -430,6 +434,15 @@ export function useFormCore<
 
   const formApi = reactive({
     hooks: markRaw(hooks as FormHooks<FormHookDefinitions<Schema>>),
+    events: markRaw({
+      hook: (name: string, fn: (...args: unknown[]) => void | Promise<void>) =>
+        events.hook(`toForm:${name}`, fn),
+      hookOnce: (name: string, fn: (...args: unknown[]) => void | Promise<void>) =>
+        events.hookOnce(`toForm:${name}`, fn),
+      callHook: async (name: string, payload?: unknown) => {
+        await events.callHook(`toField:${name}`, payload)
+      },
+    }) as unknown as FormEvents,
     fields: markRaw({} as BuildFormFieldAccessors<Data, false, true>),
     isDirty,
     isChanged: computed(() => !hasSubObject<object, object>(sourceValues.value ?? {}, formData)),

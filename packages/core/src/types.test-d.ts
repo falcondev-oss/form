@@ -7,9 +7,18 @@ import type {
   GetDiscriminator,
   NullableDeep,
 } from './types'
-import { assertType, describe, test } from 'vitest'
+import { assertType, describe, expectTypeOf, test } from 'vitest'
 import z from 'zod'
 import { useFormCore } from './core'
+
+declare module './types' {
+  interface Register {
+    events: {
+      toForm: { submitted: { id: number }; ping: void }
+      toField: { highlight: { color: string } }
+    }
+  }
+}
 
 const brand = Symbol('Brand')
 
@@ -260,5 +269,49 @@ describe('FormField', () => {
         }>
       >,
     )
+  })
+})
+
+describe('events', () => {
+  const form = useFormCore({
+    schema: z.object({ name: z.string() }),
+    sourceValues: { name: '' },
+    async submit() {},
+  })
+  const field = form.fields.name.$use()
+
+  test('listeners receive typed payloads (and form listeners the sender field)', () => {
+    form.events.hook('submitted', (payload, sender) => {
+      expectTypeOf(payload).toEqualTypeOf<{ id: number }>()
+      expectTypeOf(sender).toEqualTypeOf<FormField<unknown>>()
+    })
+    form.events.hook('ping', (payload) => {
+      expectTypeOf(payload).toEqualTypeOf<void>()
+    })
+    field.events.hook('highlight', (payload) => {
+      expectTypeOf(payload).toEqualTypeOf<{ color: string }>()
+    })
+  })
+
+  test('emitting is allowed only in the correct direction', () => {
+    void field.events.callHook('submitted', { id: 1 }) // field -> form
+    void field.events.callHook('ping') // void payload
+    void form.events.callHook('highlight', { color: 'red' }) // form -> field
+
+    // @ts-expect-error form cannot emit a field -> form event
+    void form.events.callHook('submitted', { id: 1 })
+    // @ts-expect-error field cannot emit a form -> field event
+    void field.events.callHook('highlight', { color: 'red' })
+  })
+
+  test('unknown events and wrong payloads are rejected', () => {
+    // @ts-expect-error unknown event
+    void form.events.callHook('nope')
+    // @ts-expect-error wrong payload type
+    void form.events.callHook('highlight', { color: 123 })
+    // @ts-expect-error missing payload
+    void form.events.callHook('highlight')
+    // @ts-expect-error void event takes no payload
+    void field.events.callHook('ping', {})
   })
 })

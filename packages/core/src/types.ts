@@ -104,6 +104,67 @@ export interface FormHookDefinitions<Schema extends FormSchema> {
   afterFieldChange: (field: FormFieldInternal<unknown>, updatedValue: unknown | null) => void
 }
 
+/**
+ * Global registry for custom form types. Augment via module augmentation to
+ * define app-wide event payloads:
+ *
+ * ```ts
+ * declare module '@falcondev-oss/form-core' {
+ *   interface Register {
+ *     events: {
+ *       toForm: { validated: { ok: boolean }; requestScroll: void } // field → form
+ *       toField: { flash: { color: string } }                        // form → field
+ *     }
+ *   }
+ * }
+ * ```
+ */
+export interface Register {}
+
+export type FormEventMap = {
+  toForm?: Record<string, any>
+  toField?: Record<string, any>
+}
+
+type EmptyEventMap = Record<never, never>
+
+type GlobalFormEvents = Register extends { events: infer E extends FormEventMap }
+  ? E
+  : EmptyEventMap
+
+type EventsInDirection<Dir extends 'toForm' | 'toField'> = Dir extends keyof GlobalFormEvents
+  ? NonNullable<GlobalFormEvents[Dir]>
+  : EmptyEventMap
+
+type EventEmitArgs<K extends PropertyKey, Payload> = [Payload] extends [void]
+  ? [name: K]
+  : [name: K, payload: Payload]
+
+type EventListen<Events extends Record<string, any>, Extra extends unknown[] = []> = <
+  K extends keyof Events & string,
+>(
+  name: K,
+  fn: (payload: Events[K], ...extra: Extra) => void | Promise<void>,
+) => () => void
+
+type EventEmit<Events extends Record<string, any>> = <K extends keyof Events & string>(
+  ...args: EventEmitArgs<K, Events[K]>
+) => Promise<void>
+
+/** Event facade on the form handle: listens to field → form, emits form → field. */
+export type FormEvents = {
+  hook: EventListen<EventsInDirection<'toForm'>, [field: FormField<unknown>]>
+  hookOnce: EventListen<EventsInDirection<'toForm'>, [field: FormField<unknown>]>
+  callHook: EventEmit<EventsInDirection<'toField'>>
+}
+
+/** Event facade on a field: listens to form → field, emits field → form. */
+export type FieldEvents = {
+  hook: EventListen<EventsInDirection<'toField'>>
+  hookOnce: EventListen<EventsInDirection<'toField'>>
+  callHook: EventEmit<EventsInDirection<'toForm'>>
+}
+
 export const setContext = Symbol('setContext')
 
 // export type NonPrimitiveReadonly<T> = T extends Primitive
@@ -139,6 +200,7 @@ export type SchemaMeta = {
 }
 
 export type FormFieldInternal<T> = {
+  events: FieldEvents
   errors: string[] | undefined
   schema: SchemaMeta
   value: T
@@ -167,6 +229,7 @@ export interface FormField<T>
 export type FormFieldProps<T> = { field: FormField<NullableDeep<T>> }
 
 export type FormHandle = {
+  events: FormEvents
   isChanged: boolean
   isDirty: boolean
   isLoading: boolean

@@ -2,7 +2,10 @@ export { useFormCore } from './core'
 
 export {
   extend,
+  type FieldEvents,
   type FormData,
+  type FormEventMap,
+  type FormEvents,
   type FormField,
   type FormFieldExtend,
   type FormFieldInternal,
@@ -17,5 +20,6 @@ export {
   type FormSourceValues,
   type FormSubmitValues,
   type NullableDeep,
+  type Register,
   type SchemaMeta,
 } from './types'

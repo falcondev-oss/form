@@ -21,6 +21,27 @@ export function useFormHandles(forms: MaybeRefOrGetter<FormHandle[]>) {
     isLoading: computed(() => toValue(forms).some((f) => f.isLoading)),
     isDisabled: computed(() => toValue(forms).some((f) => f.isDisabled)),
     errors: computed(() => toValue(forms).find((f) => f.errors)?.errors),
+    events: {
+      hook(name, fn) {
+        const unsub = toValue(forms).map((f) => f.events.hook(name, fn))
+        return () => {
+          for (const u of unsub) u()
+        }
+      },
+      hookOnce(name, fn) {
+        const unsub = toValue(forms).map((f) => f.events.hookOnce(name, fn))
+        return () => {
+          for (const u of unsub) u()
+        }
+      },
+      async callHook(...args) {
+        await Promise.all(
+          toValue(forms).map(async (f) =>
+            (f.events.callHook as (...a: unknown[]) => Promise<void>)(...args),
+          ),
+        )
+      },
+    } satisfies FormHandle['events'],
     submit: async () => Promise.all(toValue(forms).map(async (f) => f.submit())),
     reset: () => {
       for (const f of toValue(forms)) f.reset()
