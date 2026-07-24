@@ -11,9 +11,7 @@ export default defineConfig({
   checks: {
     legacyCjs: false,
   },
-  external: ['vue', '@vue/reactivity', '@standard-schema/spec'],
+  external: ['vue', '@vue/reactivity', '@solidjs/signals', '@standard-schema/spec'],
   platform: 'browser',
-  noExternal: ['on-change'],
-  inlineOnly: ['on-change'],
   clean: true,
 })

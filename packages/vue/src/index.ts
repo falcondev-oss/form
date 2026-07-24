@@ -6,11 +6,35 @@ import type {
 } from '@falcondev-oss/form-core'
 import type { MaybeRefOrGetter, WritableComputedRef } from 'vue'
 import { extend, useFormCore } from '@falcondev-oss/form-core'
-import { computed, reactive, toValue } from 'vue'
+import { createEffect, createRoot, deep, flush } from '@solidjs/signals'
+import { computed, getCurrentScope, reactive, shallowRef, toValue, watch } from 'vue'
 
 declare module '@falcondev-oss/form-core' {
   interface FormFieldExtend<T> {
     model: WritableComputedRef<T>
+  }
+}
+
+// Re-expose Solid store reactivity to Vue: any tracked read routes through a
+// bumped ref so Vue re-evaluates when the store flushes.
+type Version = { value: number }
+
+function bridgeGetters(obj: object, version: Version) {
+  for (const key of Object.getOwnPropertyNames(obj)) {
+    const desc = Object.getOwnPropertyDescriptor(obj, key)
+    if (!desc?.get || !desc.configurable) continue
+    // eslint-disable-next-line ts/unbound-method
+    const origGet = desc.get
+    Object.defineProperty(obj, key, {
+      configurable: true,
+      enumerable: desc.enumerable,
+      get() {
+        void version.value
+        return origGet.call(this) as unknown
+      },
+      // eslint-disable-next-line ts/unbound-method
+      set: desc.set,
+    })
   }
 }
 
@@ -56,22 +80,74 @@ export function useForm<
 >(
   opts: FormOptions<Schema, SourceValues>,
 ): ReturnType<typeof useFormCore<Schema, SourceValues>> & { _v: 'new' } {
-  const form = useFormCore({
+  const version = shallowRef(0)
+
+  const form = useFormCore<Schema, SourceValues>({
     ...opts,
+    // read source untracked at init; reactive vue sources are bridged below
+    sourceValues: () => toValue(opts.sourceValues as MaybeRefOrGetter<SourceValues>),
     [extend]: {
       $use: (field) => {
+        bridgeGetters(field, version)
         const model = computed({
           get: () => field.value,
-          set: (v) => field.handleChange(v),
+          set: (v) => {
+            field.handleChange(v)
+            flush()
+          },
         })
-
-        return { model }
+        Object.defineProperty(field, 'model', {
+          configurable: true,
+          get: () => model.value,
+          set: (v: (typeof field)['value']) => {
+            model.value = v
+          },
+        })
+        return {} as never
       },
     },
   })
 
-  // TODO: remove _v type flag
-  return Object.assign(form, { _v: 'new' } as const)
+  // Solid → Vue: bump `version` whenever the store or form flags settle.
+  createRoot(() => {
+    createEffect(
+      () => {
+        deep((form as unknown as { '~': { store: object } })['~'].store)
+        void form.isDirty
+        void form.isChanged
+        void form.isLoading
+        void form.errors
+      },
+      () => {
+        version.value++
+      },
+      { defer: true },
+    )
+  })
+
+  // Vue → Solid: a reactive vue source can't be tracked by the Solid engine, so
+  // re-sync on change via reset() (which re-reads the current source), honoring
+  // the dirty-guard exactly like the core's own source-update path.
+  if (getCurrentScope()) {
+    watch(
+      () => toValue(opts.sourceValues as MaybeRefOrGetter<SourceValues>),
+      () => {
+        if (!form.isDirty) form.reset()
+      },
+      { deep: true },
+    )
+  }
+
+  const wrapped = reactive(
+    new Proxy(form as object, {
+      get(target, prop, receiver) {
+        void version.value
+        return Reflect.get(target, prop, receiver) as unknown
+      },
+    }),
+  )
+
+  return Object.assign(wrapped, { _v: 'new' } as const) as never
 }
 
 export type {
@@ -82,4 +158,3 @@ export type {
   FormHandle,
   NullableDeep,
 } from '@falcondev-oss/form-core'
-export { refEffect } from '@falcondev-oss/form-core/reactive'

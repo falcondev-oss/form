@@ -52,6 +52,7 @@
   },
   "dependencies": {
     "@falcondev-oss/form-core": "workspace:*",
+    "@solidjs/signals": "2.0.0-beta.24",
     "hookable": "^6.1.1"
   },
   "devDependencies": {

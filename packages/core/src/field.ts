@@ -1,43 +1,70 @@
+import type { Owner } from '@solidjs/signals'
 import type { StandardSchemaV1 } from '@standard-schema/spec'
-import type { ComputedRef, Ref } from '@vue/reactivity'
 import type { Hookable } from 'hookable'
 import type { JsonSchema } from 'json-schema-library'
-import type { FieldCache } from './core'
 import type {
-  FormData,
   FormFieldContext,
   FormFieldInternal,
   FormFieldTranslator,
   FormHookDefinitions,
   FormOptions,
   FormSchema,
-  FormSourceValues,
 } from './types'
-import { computed, reactive, ref, shallowReadonly, toRaw, toRefs, watch } from '@vue/reactivity'
-import { deleteProperty, setProperty } from 'dot-prop'
+import { createMemo, createSignal, flush, runWithOwner, untrack } from '@solidjs/signals'
 import { isDeepEqual } from 'remeda'
-import { refEffect } from './reactive'
 import { getSchemaMeta } from './schema-meta'
 import { extend, setContext } from './types'
-import { getFieldCachePath, getProperty, pathSegmentsToPathString } from './util'
+import { getProperty, pathSegmentsToPathString } from './util'
 
-export type Form<Schema extends FormSchema> = {
-  hooks: Hookable<FormHookDefinitions<Schema>>
-  disabled: Ref<boolean>
-  updateCount: Ref<number>
-  data: FormData<Schema>
-  opts: FormOptions<Schema, FormSourceValues<Schema>>
-  error: Ref<StandardSchemaV1.FailureResult | undefined>
-  sourceValues: Ref<FormData<Schema> | undefined>
-  isLoading: Ref<boolean>
-  isPending: Ref<boolean>
-  fieldCache: FieldCache
+export type PathSegment = string | number
+
+/**
+ * How a field is anchored to the reactive store.
+ * - `node`: a reference node (object/array). Identity travels with the datum across
+ *   reorder/splice/sort — the field is cached by the store node itself.
+ * - `leaf`: a primitive value living on a parent reference node, keyed by property
+ *   (stable for objects, positional index for arrays — the accepted hybrid limit).
+ * - `fallback`: value/parent don't exist yet (pending); keyed positionally by path.
+ */
+export type FieldResolution =
+  | { kind: 'node'; node: object }
+  | { kind: 'leaf'; parent: object; key: PathSegment }
+  | { kind: 'fallback'; segments: PathSegment[] }
+
+export type FieldEnv = {
+  hooks: Hookable<FormHookDefinitions<FormSchema>>
+  opts: FormOptions<FormSchema>
   jsonSchema: JsonSchema | undefined
+  owner: Owner | null
+
+  disabled: () => boolean
+  isPending: () => boolean
+  isLoading: () => boolean
+  sourceValues: () => object | undefined
+  snapshotData: () => object
+  formError: () => StandardSchemaV1.FailureResult | undefined
+  liveFields: Set<FormField<unknown, FormSchema>>
+
+  /** Current path segments of a live reference node (identity-correct across reorder). */
+  segmentsOfNode: (node: object) => PathSegment[]
+  /** Reactive read of the value at `segments` from the store root. */
+  readAt: (segments: PathSegment[]) => unknown
+  /** Route a write into the store setter (batched). */
+  write: (segments: PathSegment[], value: unknown) => void
+  bumpUpdateCount: () => void
+  /** Whole-form validation (after the pending batch is flushed). */
+  validate: () => Promise<unknown>
+}
+
+let nextKey = 0
+
+function accessor(get: () => unknown, set?: (v: unknown) => void): PropertyDescriptor {
+  return { enumerable: true, configurable: true, get, set }
 }
 
 export type FieldOpts = { discriminator?: string }
 
-function filterFieldIssues(fieldPath: string, fieldCache: FieldCache) {
+function filterFieldIssues(fieldPath: string, claimedPaths: Set<string>) {
   return (issue: StandardSchemaV1.Issue): boolean => {
     if (!issue.path) return false
     const issuePath = pathSegmentsToPathString(issue.path)
@@ -45,206 +72,171 @@ function filterFieldIssues(fieldPath: string, fieldCache: FieldCache) {
     // direct field issues
     if (issuePath === fieldPath) return true
 
-    // only include nested issues for fields are not connected
-    return issuePath.startsWith(fieldPath) && !getProperty(fieldCache, issuePath)?.$field
+    // nested issues, but only if no other field owns that exact path
+    return issuePath.startsWith(fieldPath) && !claimedPaths.has(issuePath)
   }
 }
 
 export class FormField<T, Schema extends FormSchema> {
-  #form: Form<Schema>
+  #env: FieldEnv
+  #resolution: FieldResolution
 
-  #validationError = ref<StandardSchemaV1.FailureResult>()
-  #errors = refEffect(this.#transformValidationError.bind(this))
-  #transformValidationError() {
-    return this.#validationError.value && this.#validationError.value.issues.length > 0
-      ? this.#validationError.value.issues.map((i) => i.message)
-      : undefined
-  }
-  #updateCount = ref(0)
-  #isEditing = ref(false)
-  #value = ref<T | null>(null)
-  protected getValue() {
-    return getProperty(this.#form.data, this.#context.value.path, null) as T
-  }
+  #validationError = createSignal<StandardSchemaV1.FailureResult | undefined>(undefined)
+  #updateCount = createSignal(0)
+  #errors: () => string[] | undefined
 
-  #context: Ref<FormFieldContext<T>>
-  #sourceValue: ComputedRef<T>
   api: FormFieldInternal<T>
 
-  async validate() {
-    const formResult = await Promise.resolve(
-      this.#form.opts.schema['~standard'].validate(toRaw(this.#form.data)),
+  readonly key: string
+
+  constructor(env: FieldEnv, resolution: FieldResolution, opts?: FieldOpts) {
+    this.#env = env
+    this.#resolution = resolution
+    this.key = `field-${nextKey++}`
+
+    env.liveFields.add(this as FormField<unknown, Schema>)
+
+    const owned = <R>(fn: () => R): R => (env.owner ? runWithOwner(env.owner, fn) : fn())
+
+    this.#errors = owned(() =>
+      createMemo(() => {
+        if (env.isLoading()) return
+        const err = this.#validationError[0]()
+        return err && err.issues.length > 0 ? err.issues.map((i) => i.message) : undefined
+      }),
     )
-    if (!formResult.issues) {
-      this.#form.error.value = undefined
-      // manually update field validation errors
-      // the watcher in constructor only works for this case if the form error is already set, doesn't work if form error already is undefined (since no change)
-      this.#validationError.value = undefined
+
+    const schemaMeta = owned(() =>
+      createMemo(() =>
+        env.jsonSchema ? getSchemaMeta(env.jsonSchema, env.snapshotData(), this.path, opts) : {},
+      ),
+    )
+
+    const api = {
+      handleChange: this.#handleChange.bind(this),
+      handleBlur: this.#handleBlur.bind(this),
+      reset: this.#reset.bind(this),
+      key: this.key,
+      [setContext]: this.#setContext.bind(this),
+    }
+    // Arrow getters close over the FormField instance (no `this` aliasing) and
+    // read Solid state lazily, so consumer reads track and stay current.
+    Object.defineProperties(api, {
+      disabled: accessor(() => env.disabled()),
+      errors: accessor(() => this.#errors()),
+      schema: accessor(() => schemaMeta()),
+      isChanged: accessor(() => !isDeepEqual<unknown>(this.value, this.#sourceValue)),
+      isDirty: accessor(() => this.#updateCount[0]() !== 0),
+      isPending: accessor(() => env.isPending()),
+      value: accessor(
+        () => this.value,
+        () => console.warn('useForm:', 'field.value is readonly, use handleChange() instead'),
+      ),
+      path: accessor(() => this.path),
+    })
+    this.api = api as unknown as FormFieldInternal<T>
+  }
+
+  /** Identity-correct current path segments. */
+  get segments(): PathSegment[] {
+    const res = this.#resolution
+    if (res.kind === 'node') return this.#env.segmentsOfNode(res.node)
+    if (res.kind === 'leaf') return [...this.#env.segmentsOfNode(res.parent), res.key]
+    return res.segments
+  }
+
+  get path(): string {
+    return pathSegmentsToPathString(this.segments)
+  }
+
+  get value(): T {
+    return this.#env.readAt(this.segments) as T
+  }
+
+  get #sourceValue(): T {
+    return getProperty(this.#env.sourceValues(), this.path, null) as T
+  }
+
+  /** Called by `validate()` to distribute filtered issues to this field. */
+  setValidationError(
+    result: StandardSchemaV1.FailureResult | undefined,
+    claimedPaths: Set<string>,
+  ) {
+    if (!result) {
+      this.#validationError[1](undefined)
       return
     }
-
-    this.#validationError.value = {
-      issues: formResult.issues.filter(
-        filterFieldIssues(this.#context.value.path, this.#form.fieldCache),
-      ),
-    } satisfies StandardSchemaV1.FailureResult
+    this.#validationError[1]({
+      issues: result.issues.filter(filterFieldIssues(this.path, claimedPaths)),
+    })
   }
 
   #handleChange(value: T) {
-    if (this.#form.disabled.value) {
-      console.warn(
-        'useForm:',
-        'handleChange() was blocked on a disabled field',
-        `(${this.#context.value.path})`,
-      )
+    if (this.#env.disabled()) {
+      console.warn('useForm:', 'handleChange() was blocked on a disabled field', `(${this.path})`)
       return
     }
 
-    this.#isEditing.value = true
-
-    void this.#form.hooks.callHook(
+    void this.#env.hooks.callHook(
       'beforeFieldChange',
       this.api as FormFieldInternal<unknown>,
       value,
     )
 
-    this.#value.value = value
+    this.#env.write(this.segments, value)
+    this.#updateCount[1]((c) => c + 1)
+    this.#env.bumpUpdateCount()
 
-    // const value = $opts?.translate?.set(_value) ?? _value
-    setProperty(this.#form.data, this.#context.value.path, value)
-    if (Array.isArray(value)) {
-      // reset keys for arrays
-      deleteProperty(this.#form.fieldCache, getFieldCachePath(this.#context.value.path))
-    }
-
-    this.#isEditing.value = false
-
-    this.#updateCount.value++
-    this.#form.updateCount.value++
-
-    void this.#form.hooks.callHook(
-      'afterFieldChange',
-      this.api as FormFieldInternal<unknown>,
-      value,
-    )
-
-    if (this.#errors.value && this.#errors.value.length > 0) void this.validate()
+    void this.#env.hooks.callHook('afterFieldChange', this.api as FormFieldInternal<unknown>, value)
   }
+
   #handleBlur() {
-    if (this.#form.disabled.value) {
-      console.warn(
-        'useForm:',
-        'handleBlur() was blocked on a disabled field',
-        `(${this.#context.value.path})`,
-      )
+    if (this.#env.disabled()) {
+      console.warn('useForm:', 'handleBlur() was blocked on a disabled field', `(${this.path})`)
       return
     }
-
-    if (this.#updateCount.value === 0) return
-
-    void this.validate()
+    // commit any pending edits so the edit-count and data are current
+    flush()
+    if (untrack(() => this.#updateCount[0]()) === 0) return
+    void this.#env.validate()
   }
+
   #reset() {
-    if (this.#form.disabled.value) {
-      console.warn(
-        'useForm:',
-        'reset() was blocked on a disabled field',
-        `(${this.#context.value.path})`,
-      )
+    if (this.#env.disabled()) {
+      console.warn('useForm:', 'reset() was blocked on a disabled field', `(${this.path})`)
       return
     }
-    // await hooks.callHook('beforeFieldReset')
-
-    this.#updateCount.value = 0
-    setProperty(this.#form.data, this.#context.value.path, this.#sourceValue.value)
-    this.#validationError.value = undefined
-
-    // await hooks.callHook('afterFieldReset')
+    this.#updateCount[1](0)
+    this.#env.write(this.segments, this.#sourceValue)
+    this.#validationError[1](undefined)
   }
 
-  #setContext(ctx: FormFieldContext<T>) {
-    this.#context.value = ctx
-    this.api.path = ctx.path
+  #setContext(_ctx: FormFieldContext<T>) {
+    // path is derived from engine identity now; nothing to store.
   }
 
-  constructor(path: string, form: Form<Schema>, opts?: FieldOpts) {
-    this.#form = form
-
-    this.#context = ref({ path })
-    this.#sourceValue = computed(
-      () => getProperty(form.sourceValues.value, this.#context.value.path, null) as T,
-    )
-
-    watch(
-      () => this.getValue(),
-      (value: T) => {
-        if (this.#isEditing.value) return
-
-        this.#value.value = value
-      },
-      { immediate: true },
-    )
-
-    watch(
-      () => form.updateCount.value === 0,
-      (isPristine) => {
-        if (isPristine) this.#updateCount.value = 0
-      },
-    )
-    watch(form.error, () => {
-      this.#validationError.value = form.error.value
-        ? ({
-            issues: form.error.value.issues.filter(
-              filterFieldIssues(this.#context.value.path, this.#form.fieldCache),
-            ),
-          } satisfies StandardSchemaV1.FailureResult)
-        : undefined
-    })
-    watch(form.isLoading, () => {
-      if (form.isLoading.value) this.#errors.reset()
-    })
-
-    const schemaMeta = computed(() =>
-      form.jsonSchema ? getSchemaMeta(form.jsonSchema, form.data, path, opts) : {},
-    )
-
-    const api = reactive({
-      disabled: form.disabled,
-      errors: this.#errors,
-      schema: schemaMeta,
-      handleChange: this.#handleChange.bind(this),
-      handleBlur: this.#handleBlur.bind(this),
-      reset: this.#reset.bind(this),
-      isChanged: computed(() => !isDeepEqual<unknown>(this.#value.value, this.#sourceValue.value)),
-      isDirty: computed(() => this.#updateCount.value !== 0),
-      isPending: form.isPending,
-      value: shallowReadonly(this.#value) as Ref<T>,
-      path,
-      key: `${path}@${new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: 'numeric', fractionalSecondDigits: 2, hour12: false })}-${Math.random()
-        .toString(36)
-        .slice(2)}`,
-      [setContext]: this.#setContext.bind(this),
-    })
-    this.api = api satisfies FormFieldInternal<T>
+  markPristine() {
+    this.#updateCount[1](0)
   }
 
   translatedApi<TT extends T, O>(translator: FormFieldTranslator<TT, O>) {
-    const extendFieldFn = this.#form.opts[extend]?.$use
-
-    const translatedField = reactive({
-      ...toRefs(this.api),
-      value: computed(() => translator.get(this.api.value as TT)),
-      handleChange: (value: O) => {
-        const v = translator.set(value)
-        return this.api.handleChange(v)
-      },
-      [setContext]: this.api[setContext],
+    const extendFieldFn = this.#env.opts[extend]?.$use
+    // Preserve the live getters from `api` (spreading would snapshot them),
+    // overriding only value/handleChange for the translation.
+    const translatedField = Object.create(
+      Object.getPrototypeOf(this.api) as object,
+      Object.getOwnPropertyDescriptors(this.api),
+    ) as FormFieldInternal<O>
+    Object.defineProperty(translatedField, 'value', {
+      configurable: true,
+      enumerable: true,
+      get: () => translator.get(this.value as TT),
     })
+    translatedField.handleChange = (value: O) => this.api.handleChange(translator.set(value))
 
     if (extendFieldFn) {
-      Object.assign(translatedField, extendFieldFn(translatedField))
+      Object.assign(translatedField, extendFieldFn(translatedField as never))
     }
-
     return translatedField
   }
 }

@@ -2,7 +2,7 @@
   "name": "@falcondev-oss/form-core",
   "type": "module",
   "version": "0.23.6",
-  "description": "Type-safe, framework agnostic form state library based on @vue/reactivity.",
+  "description": "Type-safe, framework agnostic form state library based on @solidjs/signals.",
   "license": "Apache-2.0",
   "repository": "github:falcondev-oss/form",
   "bugs": {
@@ -16,8 +16,7 @@
     "typescript"
   ],
   "exports": {
-    ".": "./src/index.ts",
-    "./reactive": "./src/reactive.ts"
+    ".": "./src/index.ts"
   },
   "publishConfig": {
     "types": "./dist/index.d.ts",
@@ -32,17 +31,7 @@
           "default": "./dist/index.cjs"
         }
       },
-      "./package.json": "./package.json",
-      "./reactive": {
-        "import": {
-          "types": "./dist/reactive.d.ts",
-          "default": "./dist/reactive.js"
-        },
-        "require": {
-          "types": "./dist/reactive.d.cts",
-          "default": "./dist/reactive.cjs"
-        }
-      }
+      "./package.json": "./package.json"
     }
   },
   "files": [
@@ -54,27 +43,24 @@
   },
   "scripts": {
     "test": "vitest run",
-    "build": "tsdown src/index.ts src/reactive.ts",
+    "build": "tsdown src/index.ts",
     "type-check": "tsc --noEmit"
   },
-  "peerDependencies": {
-    "@vue/reactivity": ">=3.5.28 <4"
-  },
   "dependencies": {
+    "@solidjs/signals": "2.0.0-beta.24",
     "@standard-schema/spec": "^1.1.0",
     "@types/json-schema": "^7.0.15",
-    "@vueuse/core": "^14.3.0",
     "dot-prop": "^10.1.0",
     "hookable": "^6.1.1",
     "json-schema-library": "^11.4.0",
     "klona": "^2.0.6",
-    "on-change": "^6.0.2",
     "remeda": "^2.34.1",
     "ts-pattern": "^5.9.0",
     "type-fest": "^5.6.0"
   },
   "devDependencies": {
     "@ark/schema": "^0.56.0",
+    "@vue/reactivity": ">=3.5.28 <4",
     "arktype": "^2.2.0",
     "typescript": "^5.9.3",
     "vitest": "^4.1.6",
