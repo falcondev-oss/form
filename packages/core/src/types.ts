@@ -1,5 +1,4 @@
 import type { StandardJSONSchemaV1, StandardSchemaV1 } from '@standard-schema/spec'
-import type { MaybeRefOrGetter, Reactive, UnwrapNestedRefs } from '@vue/reactivity'
 import type { Hookable, NestedHooks } from 'hookable'
 import type { JSONSchema7, JSONSchema7Type } from 'json-schema'
 import type {
@@ -68,6 +67,7 @@ export type FormSubmitValues<Schema extends FormSchema> = StandardSchemaV1.Infer
 export const extend = Symbol('extend')
 
 type MaybeGetter<T extends object | undefined> = T | (() => T)
+type MaybeValue<T> = T | (() => T) | { readonly value: T }
 
 export type FormSourceValues<S extends FormSchema> = Writable<FormData<S>> | undefined
 
@@ -79,9 +79,11 @@ export interface FormOptions<
   schema: Schema
   sourceValues: MaybeGetter<SourceValues>
   submit: (ctx: { values: SubmitValues }) => Promise<void | { success: boolean }>
-  disabled?: MaybeRefOrGetter<boolean>
+  disabled?: MaybeValue<boolean>
+  reconcileKey?: string | ((item: NonNullable<unknown>) => unknown)
   hooks?: NestedHooks<FormHookDefinitions<Schema>>
   [extend]?: {
+    track?: () => void
     setup?: <T>(field: FormFieldInternal<T>) => FormFieldExtend<T>
     $use?: <T>(field: FormFieldInternal<T>) => FormFieldExtend<T>
   }
@@ -160,21 +162,27 @@ export type FormFieldContext<T> = Parameters<FormFieldInternal<T>[typeof setCont
 export interface FormFieldExtend<T> {}
 
 export interface FormField<T>
-  extends Readonly<Omit<FormFieldInternal<T>, '$'>>, UnwrapNestedRefs<FormFieldExtend<T>> {
+  extends Readonly<Omit<FormFieldInternal<T>, '$'>>, FormFieldExtend<T> {
   $: () => BuildFormFieldAccessors<T>
 }
 
 export type FormFieldProps<T> = { field: FormField<NullableDeep<T>> }
 
 export type FormHandle = {
-  isChanged: boolean
-  isDirty: boolean
-  isLoading: boolean
-  isDisabled: boolean
-  errors: readonly [StandardSchemaV1.Issue, ...StandardSchemaV1.Issue[]] | undefined
-  submit: () => Promise<unknown>
-  reset: () => void
-  hooks: FormHooks<FormHookDefinitions<FormSchema>>
+  'isChanged': boolean
+  'isDirty': boolean
+  'isLoading': boolean
+  'isDisabled': boolean
+  'errors': readonly [StandardSchemaV1.Issue, ...StandardSchemaV1.Issue[]] | undefined
+  'submit': () => Promise<unknown>
+  'reset': () => void
+  'setData': (recipe: (data: any) => void) => void
+  'hooks': FormHooks<FormHookDefinitions<FormSchema>>
+  '~': {
+    flush: () => void
+    subscribe: (listener: () => void) => () => void
+    getSnapshot: () => number
+  }
 }
 
 export type FormFieldTranslator<T, O> = {
@@ -278,9 +286,7 @@ export type BuildFormFieldAccessors<T, StopDiscriminator = false, _Root extends 
               : BuildFormFieldAccessors<TT[I]>
             : BuildFormFieldAccessors<TT[I]>
           delete: (key: string) => void
-          [Symbol.iterator]: () => ArrayIterator<
-            Reactive<BuildFormFieldAccessors<NonNullable<TT>[number]>>
-          >
+          [Symbol.iterator]: () => ArrayIterator<BuildFormFieldAccessors<NonNullable<TT>[number]>>
         } & FormFieldAccessor<T>
       : [NonNullable<T>] extends [Record<string, unknown>]
         ? ObjectHasFunctionsOrSymbols<T> extends true
