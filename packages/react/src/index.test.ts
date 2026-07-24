@@ -1,98 +1,105 @@
-import { act, renderHook } from '@testing-library/react-hooks'
-import { isReactive, watch } from '@vue/reactivity'
+import { useFormCore } from '@falcondev-oss/form-core'
+import { createSignal } from '@solidjs/signals'
+import { createElement } from 'react'
+import { create } from 'react-test-renderer'
 import { describe, expect, test, vi } from 'vitest'
 import z from 'zod'
 import { useField, useForm } from '.'
-import { tick } from './util'
 
 describe('react', () => {
-  test('model', async () => {
-    const { result: form } = renderHook(() =>
-      useForm({
-        schema: z.object({
-          name: z.string(),
-        }),
-        sourceValues: () => ({
-          name: 'John Doe',
-        }),
+  test('model updates the form and re-renders', async () => {
+    const schema = z.object({ name: z.string() })
+    let form!: ReturnType<typeof useForm<typeof schema>>
+    let renders = 0
+
+    function Component() {
+      form = useForm({
+        schema,
+        sourceValues: { name: 'John Doe' },
         async submit() {},
-      }),
-    )
+      })
+      renders++
+      return null
+    }
 
-    expect(form.current.fields.name.$use().model.value).toEqual('John Doe')
+    create(createElement(Component))
+    await vi.waitFor(() => expect(renders).toBeGreaterThan(0))
+    const initialRenders = renders
+    form.fields.name.$use().model.onUpdate('Jane Doe')
+    form['~'].flush()
 
-    expect(form.all.length).toEqual(1)
-    const previousTick = form.current.fields.name.$use()[tick]
-
-    act(() => {
-      form.current.fields.name.$use().model.onUpdate('Jane Doe')
-    })
-
-    // check if react component update occurred
-    const currentTick = form.current.fields.name.$use()[tick]
-    expect(form.all.length).toEqual(2)
-
-    expect(previousTick).toBeLessThan(currentTick)
-
-    expect(form.current.fields.name.$use().model.value).toEqual('Jane Doe')
-    expect(form.current.data?.name).toEqual('Jane Doe')
+    await vi.waitFor(() => expect(renders).toBeGreaterThan(initialRenders))
+    expect(form.fields.name.$use().model.value).toBe('Jane Doe')
+    expect(form.data!.name).toBe('Jane Doe')
   })
 
-  test('useField', async () => {
-    const {
-      result: { current: form },
-    } = renderHook(() =>
-      useForm({
-        schema: z.object({
-          name: z.string(),
-        }),
-        sourceValues: () => ({
-          name: 'John Doe',
-        }),
-        async submit() {},
-      }),
-    )
-    expect(form.fields.name.$use().value).toEqual('John Doe')
-
-    const nameField = form.fields.name.$use()
-    const { result } = renderHook(() => {
-      useField(nameField)
+  test('useField re-renders for field changes', async () => {
+    const form = useFormCore({
+      schema: z.object({ name: z.string() }),
+      sourceValues: { name: 'John Doe' },
+      async submit() {},
     })
-    expect(result.all.length).toEqual(1)
+    const field = form.fields.name.$use()
+    let renders = 0
 
-    act(() => {
-      nameField.handleChange('Jane Doe')
-    })
+    function Component() {
+      useField(field)
+      renders++
+      return null
+    }
 
-    // check if react component update occurred
-    expect(result.all.length).toEqual(2)
+    create(createElement(Component))
+    await vi.waitFor(() => expect(renders).toBeGreaterThan(0))
+    const initialRenders = renders
+    field.handleChange('Jane Doe')
+    form['~'].flush()
+
+    await vi.waitFor(() => expect(renders).toBeGreaterThan(initialRenders))
+    expect(field.value).toBe('Jane Doe')
   })
 
-  test('reactivity', () => {
-    const {
-      result: { current: form },
-    } = renderHook(() =>
-      useForm({
-        schema: z.object({
-          name: z.string(),
-        }),
-        sourceValues: () => ({
-          name: 'John Doe',
-        }),
+  test('useField re-renders for field-only dirty state changes', async () => {
+    const form = useFormCore({
+      schema: z.object({ name: z.string() }),
+      sourceValues: { name: 'John Doe' },
+      async submit() {},
+    })
+    const field = form.fields.name.$use()
+    let dirty = false
+
+    function Component() {
+      useField(field)
+      dirty = field.isDirty
+      return null
+    }
+
+    create(createElement(Component))
+    field.handleChange('John Doe')
+    await vi.waitFor(() => expect(dirty).toBe(true))
+
+    field.reset()
+    await vi.waitFor(() => expect(dirty).toBe(false))
+  })
+
+  test('source getter updates flow into a pristine form', async () => {
+    const schema = z.object({ name: z.string() })
+    const [sourceValues, setSourceValues] = createSignal({ name: 'John Doe' })
+    let form!: ReturnType<typeof useForm<typeof schema>>
+
+    function Component() {
+      form = useForm({
+        schema,
+        sourceValues,
         async submit() {},
-      }),
-    )
+      })
+      return null
+    }
 
-    expect(isReactive(form)).toBe(true)
+    create(createElement(Component))
+    await vi.waitFor(() => expect(form.data!.name).toBe('John Doe'))
+    setSourceValues({ name: 'Jane Doe' })
+    form['~'].flush()
 
-    const dataWatcher = vi.fn()
-    watch(() => form.data.name, dataWatcher)
-    const isChangedWatcher = vi.fn()
-    watch(() => form.isChanged, isChangedWatcher)
-
-    form.data.name = 'Jane Doe'
-
-    expect(dataWatcher).toHaveBeenCalledOnce()
-    expect(isChangedWatcher).toHaveBeenCalledOnce()
+    await vi.waitFor(() => expect(form.data!.name).toBe('Jane Doe'))
   })
 })

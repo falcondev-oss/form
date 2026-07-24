@@ -23,6 +23,7 @@ describe('vue', () => {
     watch(() => form.isChanged, isChangedWatcher, { flush: 'sync' })
 
     form.data.name = 'Jane Doe'
+    form['~'].flush()
 
     expect(dataWatcher).toHaveBeenCalledOnce()
     expect(isChangedWatcher).toHaveBeenCalledOnce()
@@ -43,6 +44,7 @@ describe('vue', () => {
 
     expect(form.fields.name.$use().model).toEqual('John Doe')
     form.fields.name.$use().model = 'Jane Doe'
+    form['~'].flush()
     expect(form.fields.name.$use().model).toEqual('Jane Doe')
     expect(form.data.name).toEqual('Jane Doe')
 
@@ -59,6 +61,7 @@ describe('vue', () => {
     watch(() => field.value, valueWatcher, { flush: 'sync' })
 
     field.model = new Date('2002-01-01')
+    form['~'].flush()
 
     expect(valueWatcher).toHaveBeenCalledOnce()
     expect(modelWatcher).toHaveBeenCalledOnce()

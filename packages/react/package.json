@@ -2,7 +2,7 @@
   "name": "@falcondev-oss/form-react",
   "type": "module",
   "version": "0.23.6",
-  "description": "Type-safe, framework agnostic form state library based on @vue/reactivity.",
+  "description": "Type-safe React form state library.",
   "license": "Apache-2.0",
   "repository": "github:falcondev-oss/form",
   "bugs": {
@@ -51,10 +51,10 @@
     "react": "^19.0.4"
   },
   "dependencies": {
-    "@falcondev-oss/form-core": "workspace:*",
-    "@vue/reactivity": "^3.5.34"
+    "@falcondev-oss/form-core": "workspace:*"
   },
   "devDependencies": {
+    "@solidjs/signals": "2.0.0-beta.24",
     "@testing-library/react-hooks": "^8.0.1",
     "@types/react": "^19.2.14",
     "@vitejs/plugin-react": "^6.0.2",

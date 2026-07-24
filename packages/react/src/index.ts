@@ -1,18 +1,13 @@
 import type {
   FormField,
-  FormFieldExtend,
   FormFieldProps,
   FormOptions,
   FormSchema,
   FormSourceValues,
 } from '@falcondev-oss/form-core'
-import type { ComputedRef } from '@vue/reactivity'
 import type { FunctionComponent, NamedExoticComponent } from 'react'
 import { extend, useFormCore } from '@falcondev-oss/form-core'
-import { refEffect } from '@falcondev-oss/form-core/reactive'
-import { computed, ref, watch } from '@vue/reactivity'
-import { memo, useEffect, useMemo, useState } from 'react'
-import { tick } from './util'
+import { memo, useEffect, useMemo, useSyncExternalStore } from 'react'
 
 export type FieldModelProps<T> = {
   model: FieldModel<T>
@@ -25,104 +20,71 @@ export type FieldModel<T> = {
 
 declare module '@falcondev-oss/form-core' {
   interface FormFieldExtend<T> {
-    model: ComputedRef<FieldModel<T>>
-    [tick]: number // Ref<number> // wait for https://github.com/vuejs/core/pull/13740
+    model: FieldModel<T>
   }
+}
+
+type AdapterInternal = {
+  updateSource: (value: unknown) => void
+  updateSubmit: (submit: FormOptions<FormSchema>['submit']) => void
+}
+
+function read<T>(value: T | (() => T)) {
+  return typeof value === 'function' ? (value as () => T)() : value
 }
 
 export function useForm<
   const Schema extends FormSchema,
   SourceValues extends FormSourceValues<Schema> = FormSourceValues<Schema>,
 >(opts: FormOptions<Schema, SourceValues>): ReturnType<typeof useFormCore<Schema, SourceValues>> {
-  const setTick = useState(0)[1]
-
-  const { form, sourceValuesRef, submitFnRef } = useMemo(() => {
-    const sourceValuesRef = refEffect(opts.sourceValues)
-    const submitFnRef = ref(opts.submit)
-
-    const tickRef = ref(0)
-    const form = useFormCore({
-      ...opts,
-      submit: async (...args) => submitFnRef.value(...args),
-      sourceValues: () => sourceValuesRef.value,
-      [extend]: {
-        setup: () => {
-          return {
-            [tick]: tickRef as unknown as number, // wait for https://github.com/vuejs/core/pull/13740
-          } satisfies Omit<FormFieldExtend<any>, 'model'> as FormFieldExtend<any>
-        },
-        $use: (field) => {
-          watch(
-            () => [field.errors, field.value],
-            () => {
-              tickRef.value = Date.now()
-              setTick(Date.now())
+  const form = useMemo(
+    () =>
+      useFormCore({
+        ...opts,
+        sourceValues: opts.sourceValues,
+        [extend]: {
+          $use: (field) => ({
+            get model() {
+              return { value: field.value, onUpdate: field.handleChange }
             },
-          )
-
-          return {
-            // this needs to be a computed to ensure reactivity, because useForm is memoized
-            model: computed(() => ({
-              value: field.value,
-              onUpdate: field.handleChange,
-            })),
-          } satisfies Omit<FormFieldExtend<any>, typeof tick> as FormFieldExtend<any>
+          }),
         },
-      },
-    })
-
-    return {
-      form,
-      sourceValuesRef,
-      submitFnRef,
-    }
-  }, [])
+      }),
+    [],
+  )
+  const internal: AdapterInternal & (typeof form)['~'] = form['~']
+  useSyncExternalStore(internal.subscribe, internal.getSnapshot, internal.getSnapshot)
 
   useEffect(() => {
-    submitFnRef.value = opts.submit
+    internal.updateSubmit(opts.submit)
   }, [opts.submit])
 
   useEffect(() => {
-    if (typeof opts.sourceValues === 'function') return
-    sourceValuesRef.value = opts.sourceValues
+    internal.updateSource(read(opts.sourceValues))
   }, [opts.sourceValues])
-
-  useEffect(() => {
-    watch(
-      () => [form.errors, form.isLoading, form.isChanged, form.isDirty],
-      () => {
-        setTick(Date.now())
-      },
-    )
-  }, [])
 
   return form
 }
 
 export function useField<T>(field: FormField<T>) {
-  const setTick = useState(0)[1]
-  useEffect(() => {
-    const watcher = watch(field, () => {
-      setTick(Date.now())
-    })
-    return watcher.stop
-  }, [field])
-
+  const internal = (
+    field as unknown as {
+      '~': {
+        subscribe: (listener: () => void) => () => void
+        getSnapshot: () => number
+      }
+    }
+  )['~']
+  useSyncExternalStore(internal.subscribe, internal.getSnapshot, internal.getSnapshot)
   return field
 }
 
 export function FormFieldMemo<T, P extends object>(
   component: FunctionComponent<P & FormFieldProps<T>>,
 ): NamedExoticComponent<P & FormFieldProps<T>> {
-  const prevTick = ref<unknown>()
-
-  return memo(component, (prev, next) => {
-    if (prevTick.value === next.field[tick]) {
-      return true // skip rerender
-    }
-
-    prevTick.value = prev.field[tick]
-    return false // rerender
+  return memo((props: P & FormFieldProps<T>): ReturnType<typeof component> => {
+    useField(props.field)
+    return component(props)
   })
 }
 

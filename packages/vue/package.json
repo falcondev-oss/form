@@ -2,7 +2,7 @@
   "name": "@falcondev-oss/form-vue",
   "type": "module",
   "version": "0.23.6",
-  "description": "Type-safe, framework agnostic form state library based on @vue/reactivity.",
+  "description": "Type-safe Vue form state library.",
   "license": "Apache-2.0",
   "repository": "github:falcondev-oss/form",
   "bugs": {
