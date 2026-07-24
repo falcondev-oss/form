@@ -3,7 +3,11 @@ import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   plugins: [react()],
+  define: {
+    'process.env.NODE_ENV': JSON.stringify('development'),
+  },
   test: {
+    environment: 'jsdom',
     typecheck: {
       enabled: true,
     },

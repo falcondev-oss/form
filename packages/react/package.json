@@ -52,14 +52,15 @@
   },
   "dependencies": {
     "@falcondev-oss/form-core": "workspace:*",
-    "@vue/reactivity": "^3.5.34"
+    "@solidjs/signals": "2.0.0-beta.24"
   },
   "devDependencies": {
-    "@testing-library/react-hooks": "^8.0.1",
     "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.2",
+    "jsdom": "^29.1.1",
     "react": "^19.2.6",
-    "react-test-renderer": "^19.2.6",
+    "react-dom": "^19.2.6",
     "typescript": "^5.9.3",
     "vitest": "^4.1.6",
     "zod": "^4.4.3"

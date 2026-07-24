@@ -80,6 +80,12 @@ export interface FormOptions<
   sourceValues: MaybeGetter<SourceValues>
   submit: (ctx: { values: SubmitValues }) => Promise<void | { success: boolean }>
   disabled?: MaybeRefOrGetter<boolean>
+  /**
+   * Identity resolver for reconciling external `sourceValues` refreshes.
+   * `null` (default) reconciles positionally (reproduces reset behavior); a
+   * property name or extractor preserves element identity across a refresh.
+   */
+  reconcileKey?: string | ((item: NonNullable<unknown>) => unknown) | null
   hooks?: NestedHooks<FormHookDefinitions<Schema>>
   [extend]?: {
     setup?: <T>(field: FormFieldInternal<T>) => FormFieldExtend<T>

@@ -3,15 +3,18 @@ import { isReactive, watch } from 'vue'
 import z from 'zod'
 import { useForm } from '.'
 
+// Writes are async (microtask-batched); tests force the pending batch current
+// via the hidden `form['~'].flush()` escape hatch, which also re-runs the
+// Solid→Vue bridge so sync Vue watchers observe the change.
+function flush(form: { '~': { flush: () => void } }) {
+  return form['~'].flush()
+}
+
 describe('vue', () => {
   test('reactivity', () => {
     const form = useForm({
-      schema: z.object({
-        name: z.string(),
-      }),
-      sourceValues: {
-        name: 'John Doe',
-      },
+      schema: z.object({ name: z.string() }),
+      sourceValues: { name: 'John Doe' },
       async submit() {},
     })
 
@@ -23,6 +26,7 @@ describe('vue', () => {
     watch(() => form.isChanged, isChangedWatcher, { flush: 'sync' })
 
     form.data.name = 'Jane Doe'
+    flush(form)
 
     expect(dataWatcher).toHaveBeenCalledOnce()
     expect(isChangedWatcher).toHaveBeenCalledOnce()
@@ -59,6 +63,7 @@ describe('vue', () => {
     watch(() => field.value, valueWatcher, { flush: 'sync' })
 
     field.model = new Date('2002-01-01')
+    flush(form)
 
     expect(valueWatcher).toHaveBeenCalledOnce()
     expect(modelWatcher).toHaveBeenCalledOnce()

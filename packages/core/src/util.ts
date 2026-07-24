@@ -31,10 +31,6 @@ export function escapePathSegment(segment: string) {
   return segment.replaceAll('.', String.raw`\.`)
 }
 
-export function getFieldCachePath(path: string) {
-  return `${path.replaceAll('[', '._array[')}`
-}
-
 export const getProperty = ((
   ...args: Parameters<typeof getProperty_>
 ): ReturnType<typeof getProperty_> => {
