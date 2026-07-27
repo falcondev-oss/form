@@ -60,9 +60,14 @@ function onUnsupported(construct: string, path: string) {
   ])
 }
 function scanUnsupported(node: Schema, path: string) {
+  let found = false
   for (const k of UNSUPPORTED_KEYS) {
-    if (node[k as keyof Schema] !== undefined) onUnsupported(k, path)
+    if (node[k as keyof Schema] !== undefined) {
+      found = true
+      onUnsupported(k, path)
+    }
   }
+  return found
 }
 
 type Schema = JSONSchema7
@@ -184,7 +189,7 @@ function resolveUnionsDeep(
   node: Schema,
   value: unknown,
 ): { node: Schema; nullable: boolean; wrapper: Schema | undefined } {
-  let nullable = false
+  let nullable = typeNames(node).includes('null')
   let wrapper: Schema | undefined
   let branches = unionBranches(node)
   while (branches) {
@@ -193,6 +198,7 @@ function resolveUnionsDeep(
     nullable ||= r.nullable
     if (!r.branch) break
     node = r.branch
+    nullable ||= typeNames(node).includes('null')
     branches = unionBranches(node)
   }
   return { node, nullable, wrapper }
@@ -221,21 +227,35 @@ type Segment = { key: string; isIndex: boolean }
 
 function parsePath(path: string): Segment[] {
   const segments: Segment[] = []
-  const regex = /[^.[\]]+|\[(\d+)\]/g
-  let m: RegExpExecArray | null
-  // eslint-disable-next-line no-cond-assign
-  while ((m = regex.exec(path))) {
-    if (m[1] === undefined) {
-      segments.push({ key: m[0], isIndex: false })
+  let key = ''
+  for (let i = 0; i < path.length; i++) {
+    if (path[i] === '\\' && path[i + 1] === '.') {
+      key += '.'
+      i++
+    } else if (path[i] === '.') {
+      if (key) segments.push({ key, isIndex: false })
+      key = ''
+    } else if (path[i] === '[') {
+      const end = path.indexOf(']', i)
+      const index = path.slice(i + 1, end)
+      if (end > i && /^\d+$/.test(index)) {
+        if (key) segments.push({ key, isIndex: false })
+        segments.push({ key: index, isIndex: true })
+        key = ''
+        i = end
+      } else {
+        key += path[i]
+      }
     } else {
-      segments.push({ key: m[1], isIndex: true })
+      key += path[i]
     }
   }
+  if (key) segments.push({ key, isIndex: false })
   return segments
 }
 
 function childSchema(node: Schema, seg: Segment, path: string): Schema | undefined {
-  scanUnsupported(node, path)
+  if (scanUnsupported(node, path)) return
 
   if (seg.isIndex) {
     const i = Number(seg.key)
@@ -265,6 +285,7 @@ function walk(root: Schema, segments: Segment[], data: unknown, path: string) {
   let curValue: unknown = data
 
   for (const seg of segments) {
+    if (scanUnsupported(node, path)) return
     node = resolveUnionsDeep(node, curValue).node
 
     parent = node
@@ -287,8 +308,9 @@ export function getSchemaMeta(jsonSchema: JSONSchema7, data: object, path: strin
   if (!walked) return {}
 
   const { parent } = walked
+  if (scanUnsupported(walked.node, path)) return {}
   const { node, nullable, wrapper } = resolveUnionsDeep(walked.node, walked.value)
-  scanUnsupported(node, path) // the terminal node itself (childSchema only scans nodes we descend through)
+  if (scanUnsupported(node, path)) return {}
   const meta = pickAnnotations(mergeSharedAnnotations(wrapper, node))
 
   const lastSeg = segments.at(-1)
