@@ -35,6 +35,8 @@ export type Form<Schema extends FormSchema> = {
   jsonSchema: JSONSchema7 | undefined
 }
 
+export type FieldOpts = { discriminator?: string }
+
 function filterFieldIssues(fieldPath: string, fieldCache: FieldCache) {
   return (issue: StandardSchemaV1.Issue): boolean => {
     if (!issue.path) return false
@@ -165,7 +167,7 @@ export class FormField<T, Schema extends FormSchema> {
     this.api.path = ctx.path
   }
 
-  constructor(path: string, form: Form<Schema>) {
+  constructor(path: string, form: Form<Schema>, opts?: FieldOpts) {
     this.#form = form
 
     this.#context = ref({ path })
@@ -203,7 +205,7 @@ export class FormField<T, Schema extends FormSchema> {
     })
 
     const schemaMeta = computed(() =>
-      form.jsonSchema ? getSchemaMeta(form.jsonSchema, form.data, path) : {},
+      form.jsonSchema ? getSchemaMeta(form.jsonSchema, form.data, path /* ,opts */) : {},
     )
 
     const api = reactive({

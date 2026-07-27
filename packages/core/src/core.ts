@@ -3,6 +3,7 @@ import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type { ComputedRef, Ref } from '@vue/reactivity'
 import type { JSONSchema7 } from 'json-schema'
 import type { $ZodTypeDef, ToJSONSchemaParams } from 'zod/v4/core'
+import type { FieldOpts } from './field'
 import type {
   BuildFormFieldAccessors,
   FormData,
@@ -23,6 +24,7 @@ import { hasAtLeast, hasSubObject, isArray } from 'remeda'
 import { match, P } from 'ts-pattern'
 import { FormField } from './field'
 import { toReactive } from './reactive'
+import { toJsonSchema } from './schema-meta'
 import { extend, setContext } from './types'
 import { debugLog, escapePathSegment, getFieldCachePath, pathSegmentsToPathString } from './util'
 
@@ -103,85 +105,7 @@ export function useFormCore<
   })
 
   const standardSchema = formOpts.schema['~standard']
-  debugLog(() => ['standardSchema', standardSchema])
-
-  const zodUnrepresentableTypes: Set<$ZodTypeDef['type']> = new Set([
-    'bigint',
-    'symbol',
-    'undefined',
-    'void',
-    'date',
-    'map',
-    'set',
-    'transform',
-    'nan',
-    'custom',
-  ])
-
-  const libraryOptions = match(standardSchema.vendor)
-    .with(
-      'zod',
-      () =>
-        ({
-          unrepresentable: 'any',
-
-          override(ctx) {
-            const zod = ctx.zodSchema._zod
-
-            if (zod.def.type === 'date') {
-              ctx.jsonSchema.type = 'integer'
-              ctx.jsonSchema.format = 'epoch'
-              ctx.jsonSchema.minimum = (zod.bag.minimum as Date | undefined)?.getTime()
-              ctx.jsonSchema.maximum = (zod.bag.maximum as Date | undefined)?.getTime()
-              return
-            }
-
-            if (zodUnrepresentableTypes.has(ctx.zodSchema._zod.def.type)) {
-              ctx.jsonSchema.type = 'object'
-              ctx.jsonSchema.format = zod.def.type
-            }
-          },
-        }) satisfies ToJSONSchemaParams,
-    )
-    .with(
-      'arktype',
-      () =>
-        ({
-          fallback: {
-            default: (ctx) => ({
-              ...ctx.base,
-              type: 'object',
-              format: ctx.code,
-            }),
-            date: (ctx) => ({
-              ...ctx.base,
-              type: 'integer',
-              format: 'epoch',
-              exclusiveMaximum: ctx.before?.getTime(),
-              exclusiveMinimum: ctx.after?.getTime(),
-            }),
-          },
-        }) satisfies ToJsonSchema.Options,
-    )
-    .otherwise(() => undefined)
-
-  debugLog(() => ['libraryOptions', libraryOptions])
-
-  let jsonSchema: JSONSchema7 | undefined
-  try {
-    jsonSchema = standardSchema.jsonSchema.input({
-      target: 'draft-07',
-      libraryOptions,
-    })
-  } catch (err) {
-    console.warn(
-      'Failed to generate JSON Schema from Standard Schema. No schema information extraction possible.\n' +
-        'Make sure your schema is compatible with JSON Schema Draft-07.\n' +
-        'For non-representable data types, use a transformation/serializer that maps them to representable types. (e.g. Zod Codecs)\n\n' +
-        'Error details:',
-      err,
-    )
-  }
+  const jsonSchema = toJsonSchema(formOpts.schema)
 
   const fieldCache: FieldCache = {}
 
@@ -261,7 +185,7 @@ export function useFormCore<
     },
   )
 
-  function createFormFieldProxy(path = '') {
+  function createFormFieldProxy(path = '', fieldOpts?: FieldOpts) {
     return new Proxy(Object.create(null) as BuildFormFieldAccessors<Data, false, true>, {
       ownKeys() {
         const fieldValue = getProperty(formData, path, undefined)
@@ -342,19 +266,23 @@ export function useFormCore<
             } else {
               debugLog(() => ['$use', path])
 
-              field = new FormField(path, {
-                hooks,
-                disabled,
-                updateCount: formUpdateCount,
-                data: formData,
-                opts: formOpts,
-                error: formError,
-                sourceValues,
-                isLoading,
-                isPending,
-                fieldCache,
-                jsonSchema,
-              })
+              field = new FormField(
+                path,
+                {
+                  hooks,
+                  disabled,
+                  updateCount: formUpdateCount,
+                  data: formData,
+                  opts: formOpts,
+                  error: formError,
+                  sourceValues,
+                  isLoading,
+                  isPending,
+                  fieldCache,
+                  jsonSchema,
+                },
+                fieldOpts,
+              )
 
               Object.defineProperty(field.api, '$', {
                 get() {
@@ -375,7 +303,7 @@ export function useFormCore<
                   () =>
                     (field.api.value as Record<string, unknown> | null)?.[discriminator] ?? null,
                 ),
-                $field: computed(() => createFormFieldProxy(field.api.path)),
+                $field: computed(() => createFormFieldProxy(field.api.path, { discriminator })),
               })
             }
 
