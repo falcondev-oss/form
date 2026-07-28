@@ -1,7 +1,7 @@
 import type { StandardJSONSchemaV1, StandardSchemaV1 } from '@standard-schema/spec'
 import type { MaybeRefOrGetter, Reactive, UnwrapNestedRefs } from '@vue/reactivity'
 import type { Hookable, NestedHooks } from 'hookable'
-import type { JSONSchema7, JSONSchema7Type } from 'json-schema'
+import type { JSONSchema } from 'json-schema-typed'
 import type {
   If,
   IsAny,
@@ -12,6 +12,7 @@ import type {
   IsTuple,
   IsUnion,
   IsUnknown,
+  JsonValue,
   PickIndexSignature,
   Simplify,
   Writable,
@@ -25,10 +26,6 @@ export interface StandardSchemasProps<Input = unknown, Output = Input>
  */
 export interface StandardSchemasSpec<Input = unknown, Output = Input> {
   '~standard': StandardSchemasProps<Input, Output>
-}
-
-declare module 'json-schema-library' {
-  interface JsonSchema extends JSONSchema7 {}
 }
 
 type ObjectHasFunctionsOrSymbols<T> =
@@ -51,11 +48,10 @@ export type NullableDeep<T> =
         ? NullableDeep<T[number]>[] | null
         : ObjectHasFunctionsOrSymbols<T> extends true
           ? T | null
-          :
-              | Simplify<{
-                  [K in keyof T]: K extends DiscriminatorKey ? T[K] | null : NullableDeep<T[K]>
-                }>
-              | (keyof PickIndexSignature<T> extends never ? null : never)
+          : | Simplify<{
+                [K in keyof T]: K extends DiscriminatorKey ? T[K] | null : NullableDeep<T[K]>
+              }>
+            | (keyof PickIndexSignature<T> extends never ? null : never)
       : T | null
     : never
 
@@ -119,15 +115,15 @@ export const contraints = [
   'exclusiveMaximum',
   'minLength',
   'maxLength',
-] as const satisfies readonly (keyof JSONSchema7)[]
+] as const satisfies readonly (keyof JSONSchema.Interface)[]
 
 export type SchemaMeta = {
   required?: boolean
 
   title?: string
   description?: string
-  default?: JSONSchema7Type
-  examples?: JSONSchema7Type
+  default?: JsonValue
+  examples?: JsonValue
 
   minimum?: number
   exclusiveMinimum?: number

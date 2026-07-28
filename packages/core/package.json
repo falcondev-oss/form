@@ -62,22 +62,21 @@
   },
   "dependencies": {
     "@standard-schema/spec": "^1.1.0",
-    "@types/json-schema": "^7.0.15",
     "@vueuse/core": "^14.3.0",
-    "dot-prop": "^10.1.0",
+    "dot-prop": "^10.2.0",
     "hookable": "^6.1.1",
-    "json-schema-library": "^11.4.0",
+    "json-schema-typed": "^8.0.2",
     "klona": "^2.0.6",
     "on-change": "^6.0.2",
-    "remeda": "^2.34.1",
+    "remeda": "^2.39.0",
     "ts-pattern": "^5.9.0",
-    "type-fest": "^5.6.0"
+    "type-fest": "^5.8.0"
   },
   "devDependencies": {
-    "@ark/schema": "^0.56.0",
-    "arktype": "^2.2.0",
-    "typescript": "^5.9.3",
-    "vitest": "^4.1.6",
+    "@ark/schema": "^0.56.2",
+    "arktype": "^2.2.3",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10",
     "zod": "^4.4.3"
   }
 }

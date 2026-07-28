@@ -30,16 +30,17 @@
     "test": "pnpm -r --color run test",
     "build": "pnpm -r --color run build",
     "type-check": "tsc --build",
-    "lint": "eslint --cache . && prettier --check --cache .",
-    "lint:ci": "eslint --cache --cache-strategy content . && prettier --check --cache --cache-strategy content .",
-    "lint:fix": "eslint --fix --cache . && prettier --write --cache ."
+    "lint": "oxlint --type-aware && prettier --check --cache .",
+    "lint:ci": "oxlint --type-aware && prettier --check --cache --cache-strategy content .",
+    "lint:fix": "oxlint --type-aware --fix && prettier --write --cache ."
   },
   "devDependencies": {
-    "@falcondev-oss/configs": "^5.0.2",
-    "eslint": "^9.39.4",
-    "prettier": "^3.8.3",
-    "tsdown": "^0.22.0",
-    "typescript": "^5.9.3"
+    "@falcondev-oss/configs": "^6.0.6",
+    "oxlint": "^1.76.0",
+    "oxlint-tsgolint": "^7.0.2001",
+    "prettier": "^3.9.6",
+    "tsdown": "^0.22.14",
+    "typescript": "^7.0.2"
   },
   "changelogithub": {
     "extends": "gh:falcondev-it/configs/changelogithub"

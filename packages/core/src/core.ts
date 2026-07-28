@@ -1,8 +1,5 @@
-import type { ToJsonSchema } from '@ark/schema'
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type { ComputedRef, Ref } from '@vue/reactivity'
-import type { JsonSchema } from 'json-schema-library'
-import type { $ZodTypeDef, ToJSONSchemaParams } from 'zod/v4/core'
 import type { FieldOpts } from './field'
 import type {
   BuildFormFieldAccessors,
@@ -24,18 +21,12 @@ import { hasAtLeast, hasSubObject, isArray } from 'remeda'
 import { match, P } from 'ts-pattern'
 import { FormField } from './field'
 import { toReactive } from './reactive'
+import { toJsonSchema } from './json-schema'
 import { extend, setContext } from './types'
 import { debugLog, escapePathSegment, getFieldCachePath, pathSegmentsToPathString } from './util'
 
 type ArrayMutationMethod =
-  | 'push'
-  | 'pop'
-  | 'unshift'
-  | 'shift'
-  | 'splice'
-  | 'sort'
-  | 'reverse'
-  | 'fill'
+  'push' | 'pop' | 'unshift' | 'shift' | 'splice' | 'sort' | 'reverse' | 'fill'
 
 function clone<const T>(value: T): T {
   return klona(value)
@@ -104,85 +95,7 @@ export function useFormCore<
   })
 
   const standardSchema = formOpts.schema['~standard']
-  debugLog(() => ['standardSchema', standardSchema])
-
-  const zodUnrepresentableTypes: Set<$ZodTypeDef['type']> = new Set([
-    'bigint',
-    'symbol',
-    'undefined',
-    'void',
-    'date',
-    'map',
-    'set',
-    'transform',
-    'nan',
-    'custom',
-  ])
-
-  const libraryOptions = match(standardSchema.vendor)
-    .with(
-      'zod',
-      () =>
-        ({
-          unrepresentable: 'any',
-
-          override(ctx) {
-            const zod = ctx.zodSchema._zod
-
-            if (zod.def.type === 'date') {
-              ctx.jsonSchema.type = 'integer'
-              ctx.jsonSchema.format = 'epoch'
-              ctx.jsonSchema.minimum = (zod.bag.minimum as Date | undefined)?.getTime()
-              ctx.jsonSchema.maximum = (zod.bag.maximum as Date | undefined)?.getTime()
-              return
-            }
-
-            if (zodUnrepresentableTypes.has(ctx.zodSchema._zod.def.type)) {
-              ctx.jsonSchema.type = 'object'
-              ctx.jsonSchema.format = zod.def.type
-            }
-          },
-        }) satisfies ToJSONSchemaParams,
-    )
-    .with(
-      'arktype',
-      () =>
-        ({
-          fallback: {
-            default: (ctx) => ({
-              ...ctx.base,
-              type: 'object',
-              format: ctx.code,
-            }),
-            date: (ctx) => ({
-              ...ctx.base,
-              type: 'integer',
-              format: 'epoch',
-              exclusiveMaximum: ctx.before?.getTime(),
-              exclusiveMinimum: ctx.after?.getTime(),
-            }),
-          },
-        }) satisfies ToJsonSchema.Options,
-    )
-    .otherwise(() => undefined)
-
-  debugLog(() => ['libraryOptions', libraryOptions])
-
-  let jsonSchema: JsonSchema | undefined
-  try {
-    jsonSchema = standardSchema.jsonSchema.input({
-      target: 'draft-07',
-      libraryOptions,
-    })
-  } catch (err) {
-    console.warn(
-      'Failed to generate JSON Schema from Standard Schema. No schema information extraction possible.\n' +
-        'Make sure your schema is compatible with JSON Schema Draft-07.\n' +
-        'For non-representable data types, use a transformation/serializer that maps them to representable types. (e.g. Zod Codecs)\n\n' +
-        'Error details:',
-      err,
-    )
-  }
+  const jsonSchema = toJsonSchema(formOpts.schema)
 
   const fieldCache: FieldCache = {}
 

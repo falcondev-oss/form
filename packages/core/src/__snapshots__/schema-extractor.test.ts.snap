@@ -1,0 +1,728 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`edge cases > dot in property name 1`] = `
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "a.b": {
+      "description": "A dot in the property name",
+      "type": "string",
+    },
+  },
+  "required": [
+    "a.b",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`edge cases > empty object 1`] = `
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {},
+  "type": "object",
+}
+`;
+
+exports[`edge cases > numeric property name 1`] = `
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "list": {
+      "items": {
+        "properties": {
+          "nr": {
+            "minimum": 3,
+            "type": "number",
+          },
+        },
+        "required": [
+          "nr",
+        ],
+        "type": "object",
+      },
+      "type": "array",
+    },
+    "rec": {
+      "additionalProperties": {
+        "properties": {
+          "nr": {
+            "minimum": 3,
+            "type": "number",
+          },
+        },
+        "required": [
+          "nr",
+        ],
+        "type": "object",
+      },
+      "propertyNames": {
+        "type": "string",
+      },
+      "type": "object",
+    },
+  },
+  "required": [
+    "rec",
+    "list",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`inference > discriminated union > discriminated unions – 'arktype' 1`] = `
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "anyOf": [
+    {
+      "properties": {
+        "nr": {
+          "title": "Number",
+          "type": "number",
+        },
+        "type": {
+          "const": "number",
+        },
+      },
+      "required": [
+        "nr",
+        "type",
+      ],
+      "type": "object",
+    },
+    {
+      "properties": {
+        "str": {
+          "title": "String",
+          "type": "string",
+        },
+        "type": {
+          "const": "string",
+        },
+      },
+      "required": [
+        "str",
+        "type",
+      ],
+      "type": "object",
+    },
+  ],
+}
+`;
+
+exports[`inference > discriminated union > discriminated unions – 'zod' 1`] = `
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "properties": {
+        "str": {
+          "title": "String",
+          "type": "string",
+        },
+        "type": {
+          "const": "string",
+          "type": "string",
+        },
+      },
+      "required": [
+        "type",
+        "str",
+      ],
+      "type": "object",
+    },
+    {
+      "properties": {
+        "nr": {
+          "title": "Number",
+          "type": "number",
+        },
+        "type": {
+          "const": "number",
+          "type": "string",
+        },
+      },
+      "required": [
+        "type",
+        "nr",
+      ],
+      "type": "object",
+    },
+  ],
+}
+`;
+
+exports[`inference > discriminated union > union 1`] = `
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "value": {
+      "oneOf": [
+        {
+          "properties": {
+            "str": {
+              "title": "String",
+              "type": "string",
+            },
+            "type": {
+              "const": "string",
+              "type": "string",
+            },
+          },
+          "required": [
+            "type",
+            "str",
+          ],
+          "type": "object",
+        },
+        {
+          "properties": {
+            "arr": {
+              "items": {
+                "anyOf": [
+                  {
+                    "title": "String",
+                    "type": "string",
+                  },
+                  {
+                    "title": "Number",
+                    "type": "number",
+                  },
+                ],
+              },
+              "minItems": 2,
+              "title": "Array",
+              "type": "array",
+            },
+            "type": {
+              "const": "array",
+              "type": "string",
+            },
+          },
+          "required": [
+            "type",
+            "arr",
+          ],
+          "type": "object",
+        },
+      ],
+    },
+  },
+  "required": [
+    "value",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`inference > double nested union 1`] = `
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "value": {
+      "anyOf": [
+        {
+          "title": "String",
+          "type": "string",
+        },
+        {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "title": "Number",
+                  "type": "number",
+                },
+                {
+                  "type": "null",
+                },
+              ],
+            },
+            {
+              "title": "Boolean",
+              "type": "boolean",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  "required": [
+    "value",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`inference > enum unions 1`] = `
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "value": {
+      "anyOf": [
+        {
+          "const": "C",
+          "title": "LiteralC",
+          "type": "string",
+        },
+        {
+          "enum": [
+            "A",
+            "B",
+          ],
+          "title": "EnumAB",
+          "type": "string",
+        },
+      ],
+    },
+  },
+  "required": [
+    "value",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`inference > match first positive assertions 1`] = `
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "value": {
+      "anyOf": [
+        {
+          "maxLength": 2,
+          "title": "Short",
+          "type": "string",
+        },
+        {
+          "minLength": 5,
+          "title": "Long",
+          "type": "string",
+        },
+      ],
+    },
+  },
+  "required": [
+    "value",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`inference > nullable is optional 1`] = `
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "nullable": {
+      "anyOf": [
+        {
+          "type": "string",
+        },
+        {
+          "type": "null",
+        },
+      ],
+    },
+    "optional": {
+      "type": "string",
+    },
+  },
+  "required": [
+    "nullable",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`inference > primitive unions 1`] = `
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "value": {
+      "anyOf": [
+        {
+          "title": "String",
+          "type": "string",
+        },
+        {
+          "title": "Number",
+          "type": "number",
+        },
+        {
+          "title": "Boolean",
+          "type": "boolean",
+        },
+        {
+          "properties": {},
+          "title": "Object",
+          "type": "object",
+        },
+      ],
+    },
+  },
+  "required": [
+    "value",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`inference > tuples 1`] = `
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "value": {
+      "anyOf": [
+        {
+          "prefixItems": [
+            {
+              "title": "String",
+              "type": "string",
+            },
+            {
+              "title": "Number",
+              "type": "number",
+            },
+          ],
+          "type": "array",
+        },
+        {
+          "prefixItems": [
+            {
+              "title": "Boolean",
+              "type": "boolean",
+            },
+            {
+              "maxLength": 5,
+              "type": "string",
+            },
+          ],
+          "type": "array",
+        },
+      ],
+    },
+  },
+  "required": [
+    "value",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`overrides > child meta overrides parent meta 1`] = `
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "value": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "title": "String",
+              "type": "string",
+            },
+            {
+              "title": "Number",
+              "type": "number",
+            },
+          ],
+        },
+        {
+          "type": "null",
+        },
+      ],
+      "title": "Value",
+    },
+  },
+  "required": [
+    "value",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`overrides > inherit meta of union parent 1`] = `
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "value": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "minLength": 2,
+              "type": "string",
+            },
+            {
+              "minimum": 1,
+              "type": "number",
+            },
+          ],
+          "title": "Value",
+        },
+        {
+          "type": "null",
+        },
+      ],
+    },
+  },
+  "required": [
+    "value",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`overrides > no value fallback to null element meta 1`] = `
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "value": {
+      "anyOf": [
+        {
+          "title": "String",
+          "type": "string",
+        },
+        {
+          "title": "Null",
+          "type": "null",
+        },
+      ],
+    },
+  },
+  "required": [
+    "value",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`primitives > date > min/max – 'arktype' 1`] = `
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "max": {
+      "format": "epoch",
+      "maximum": 1609372800000,
+      "minimum": undefined,
+      "type": "integer",
+    },
+    "min": {
+      "format": "epoch",
+      "maximum": undefined,
+      "minimum": 1577836800000,
+      "type": "integer",
+    },
+  },
+  "required": [
+    "max",
+    "min",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`primitives > date > min/max – 'zod' 1`] = `
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "max": {
+      "format": "epoch",
+      "maximum": 1609372800000,
+      "type": "integer",
+    },
+    "min": {
+      "format": "epoch",
+      "minimum": 1577836800000,
+      "type": "integer",
+    },
+  },
+  "required": [
+    "min",
+    "max",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`primitives > number minimum/maximum 1`] = `
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "gt": {
+      "exclusiveMinimum": 1,
+      "type": "number",
+    },
+    "lt": {
+      "exclusiveMaximum": 10,
+      "type": "number",
+    },
+    "max": {
+      "maximum": 10,
+      "type": "number",
+    },
+    "min": {
+      "minimum": 1,
+      "type": "number",
+    },
+  },
+  "required": [
+    "min",
+    "max",
+    "gt",
+    "lt",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`primitives > optional/required object properties 1`] = `
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "optional": {
+      "type": "string",
+    },
+    "required": {
+      "type": "string",
+    },
+  },
+  "required": [
+    "required",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`primitives > string minLength/maxLength 1`] = `
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "max": {
+      "maxLength": 10,
+      "type": "string",
+    },
+    "min": {
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "min",
+    "max",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`primitives > unrepresentable types > unrepresentable types – 'arktype' 1`] = `
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "bigint": {
+      "properties": {
+        "__type": {
+          "const": "bigint",
+        },
+      },
+      "type": "object",
+    },
+    "map": {
+      "properties": {
+        "__type": {
+          "const": "map",
+        },
+      },
+      "type": "object",
+    },
+    "set": {
+      "properties": {
+        "__type": {
+          "const": "set",
+        },
+      },
+      "type": "object",
+    },
+    "symbol": {
+      "properties": {
+        "__type": {
+          "const": "symbol",
+        },
+      },
+      "type": "object",
+    },
+    "undefined": {
+      "properties": {
+        "__type": {
+          "const": "undefined",
+        },
+      },
+      "type": "object",
+    },
+  },
+  "required": [
+    "bigint",
+    "map",
+    "set",
+    "symbol",
+    "undefined",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`primitives > unrepresentable types > unrepresentable types – 'zod' 1`] = `
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "bigint": {
+      "properties": {
+        "__type": {
+          "const": "bigint",
+        },
+      },
+      "type": "object",
+    },
+    "map": {
+      "properties": {
+        "__type": {
+          "const": "map",
+        },
+      },
+      "type": "object",
+    },
+    "set": {
+      "properties": {
+        "__type": {
+          "const": "set",
+        },
+      },
+      "type": "object",
+    },
+    "symbol": {
+      "properties": {
+        "__type": {
+          "const": "symbol",
+        },
+      },
+      "type": "object",
+    },
+    "undefined": {
+      "properties": {
+        "__type": {
+          "const": "undefined",
+        },
+      },
+      "type": "object",
+    },
+  },
+  "required": [
+    "bigint",
+    "symbol",
+    "undefined",
+    "map",
+    "set",
+  ],
+  "type": "object",
+}
+`;
