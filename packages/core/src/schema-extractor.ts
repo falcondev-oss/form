@@ -1,101 +1,112 @@
-import type { JSONSchema7, JSONSchema7Definition, JSONSchema7TypeName } from 'json-schema'
+/**
+ * Reads field metadata out of a JSON Schema (draft 2020-12) as emitted by
+ * Standard Schema libraries (zod, arktype).
+ *
+ * Everything here is deliberately lenient: form data is edited in place, so the
+ * value at a path is routinely `null`, partially filled or invalid, and a schema
+ * that can't be navigated degrades to `{}` instead of throwing. `$ref`, `allOf`,
+ * `if`/`then`, `not` and `patternProperties` are not navigated — a path through
+ * one of them yields `{}`.
+ */
+import type { JSONSchema } from 'json-schema-typed'
 import type { SchemaMeta } from './types'
-import { debugLog } from './util'
+import { parsePath } from 'dot-prop'
 
-const META_KEYS = [
-  'title',
-  'description',
-  'default',
-  'examples',
-  'minimum',
-  'exclusiveMinimum',
-  'maximum',
-  'exclusiveMaximum',
-  'minLength',
-  'maxLength',
-] as const satisfies readonly (keyof SchemaMeta)[]
+type Schema = JSONSchema.Interface
 
-const UNSUPPORTED_KEYS = [
-  '$ref',
-  'allOf',
-  'if',
-  'then',
-  'else',
-  'not',
-  'patternProperties',
-] as const
+/**
+ * JSON Schema keyword -> `SchemaMeta` key. Array bounds are reported as length
+ * bounds: to a form field, both answer "how many".
+ */
+const META_KEYS = {
+  title: 'title',
+  description: 'description',
+  default: 'default',
+  examples: 'examples',
+  minimum: 'minimum',
+  exclusiveMinimum: 'exclusiveMinimum',
+  maximum: 'maximum',
+  exclusiveMaximum: 'exclusiveMaximum',
+  minLength: 'minLength',
+  maxLength: 'maxLength',
+  minItems: 'minLength',
+  maxItems: 'maxLength',
+} as const satisfies Partial<Record<keyof Schema, keyof SchemaMeta>>
 
-// Module-level dedup for the one-time warning. Exposed so a CI test can assert that
-// the real schemas never hit an unsupported construct (and reset between suites).
-export const unsupportedConstructs = new Set<string>()
-export function resetUnsupportedConstructs() {
-  unsupportedConstructs.clear()
-}
-function onUnsupported(construct: string, path: string) {
-  if (unsupportedConstructs.has(construct)) return
-  unsupportedConstructs.add(construct)
-  debugLog(() => [
-    `useForm: schema navigator hit unsupported JSON Schema construct '${construct}' at path '${path}' — field metadata degraded to {}`,
-  ])
-}
-function scanUnsupported(node: Schema, path: string) {
-  let found = false
-  for (const k of UNSUPPORTED_KEYS) {
-    if (node[k as keyof Schema] !== undefined) {
-      found = true
-      onUnsupported(k, path)
-    }
+function annotations(schema: Schema): SchemaMeta {
+  const meta: Record<string, unknown> = {}
+  for (const [keyword, key] of Object.entries(META_KEYS)) {
+    const value = schema[keyword as keyof Schema]
+    if (value !== undefined) meta[key] = value
   }
-  return found
+  return meta as SchemaMeta
 }
 
-type Schema = JSONSchema7
-
-function asSchema(s: JSONSchema7Definition | undefined): Schema | undefined {
-  // boolean schemas (`true`/`false`) and absent schemas carry no metadata for us
-  return typeof s === 'object' && s !== null ? s : undefined
+// boolean schemas (`true`/`false`) carry no metadata for us
+function asSchema(schema: JSONSchema | undefined): Schema | undefined {
+  return typeof schema === 'object' && schema !== null ? schema : undefined
 }
 
-function typeNames(schema: Schema): JSONSchema7TypeName[] {
-  if (!schema.type) return []
-  return Array.isArray(schema.type) ? schema.type : [schema.type]
+function branches(schema: Schema): Schema[] | undefined {
+  const union = (schema.oneOf ?? schema.anyOf)?.map(asSchema).filter((s) => s !== undefined)
+  return union?.length ? union : undefined
 }
 
-function isNullBranch(schema: Schema): boolean {
-  const t = typeNames(schema)
-  return t.length === 1 && t[0] === 'null'
+// json-schema-typed types `prefixItems` as a schema *or* a list of schemas; only
+// the list is valid 2020-12
+function prefixItems(schema: Schema): readonly (JSONSchema | undefined)[] {
+  return Array.isArray(schema.prefixItems) ? schema.prefixItems : []
 }
 
-function typeMatchesValue(schema: Schema, value: unknown): boolean {
-  const types = typeNames(schema)
-  if (types.length === 0) return true // untyped branch matches anything
-  return types.some((t) => {
-    switch (t) {
-      case 'null': {
-        return value === null
-      }
-      case 'string': {
-        return typeof value === 'string'
+function types(schema: Schema): string[] {
+  const type = schema.type
+  if (type === undefined) return []
+  // json-schema-typed types `type` through a generic helper that computes extra
+  // non-string members; a real `type` is always a string or an array of strings.
+  return (Array.isArray(type) ? type : [type]) as string[]
+}
+
+function isNull(schema: Schema): boolean {
+  return types(schema).length === 1 && types(schema)[0] === 'null'
+}
+
+/**
+ * A bare `{type: 'null'}` branch is how a nullable field is encoded, so it makes
+ * the field optional. One carrying annotations is a union member the schema
+ * author described on purpose — that one is a value like any other.
+ */
+function isNullableSugar(schema: Schema): boolean {
+  return isNull(schema) && Object.keys(annotations(schema)).length === 0
+}
+
+function typeMatches(schema: Schema, value: unknown): boolean {
+  const expected = types(schema)
+  if (expected.length === 0) return true // untyped: matches anything
+
+  return expected.some((type) => {
+    switch (type) {
+      case 'array': {
+        return Array.isArray(value)
       }
       case 'boolean': {
         return typeof value === 'boolean'
       }
       case 'integer': {
-        // dates are configured to serialize as {type:'integer', format:'epoch'};
-        // the in-memory value may still be a Date, so accept both.
-        return (
-          (typeof value === 'number' && Number.isInteger(value)) ||
-          (schema.format === 'epoch' && value instanceof Date)
-        )
+        // dates serialize as {type: 'integer', format: 'epoch'}, but the
+        // in-memory form value is still a Date
+        return Number.isInteger(value) || (schema.format === 'epoch' && value instanceof Date)
+      }
+      case 'null': {
+        return value === null
       }
       case 'number': {
         return typeof value === 'number'
       }
-      case 'array': {
-        return Array.isArray(value)
-      }
       case 'object': {
         return typeof value === 'object' && value !== null && !Array.isArray(value)
+      }
+      case 'string': {
+        return typeof value === 'string'
       }
       default: {
         return false
@@ -104,203 +115,163 @@ function typeMatchesValue(schema: Schema, value: unknown): boolean {
   })
 }
 
-function unionBranches(schema: Schema): Schema[] | undefined {
-  const of = schema.oneOf ?? schema.anyOf
-  if (!of) return undefined
-  return of.map(asSchema).filter((s): s is Schema => !!s)
+/** Numbers and dates are bounded by their value, strings and arrays by their length. */
+function measure(value: unknown): number | undefined {
+  if (typeof value === 'number') return value
+  if (value instanceof Date) return value.getTime()
+  if (typeof value === 'string' || Array.isArray(value)) return value.length
+  return undefined
 }
 
-function branchLiteralMatches(branch: Schema, value: unknown): boolean {
-  if ('const' in branch) return branch.const === value
-  if (Array.isArray(branch.enum)) return (branch.enum as unknown[]).includes(value)
-  return false
-}
+function boundsMatch(schema: Schema, value: unknown): boolean {
+  const n = measure(value)
+  if (n === undefined) return true
 
-// Discriminated-object union: the branch whose const/enum *properties* all agree with
-// the value. Requires ≥1 such property so a const-free branch can't win vacuously.
-function matchDiscriminatedBranch(
-  branches: Schema[],
-  value: Record<string, unknown>,
-): Schema | undefined {
-  return branches.find((b) => {
-    if (!b.properties) return false
-    const discriminators = Object.entries(b.properties)
-      .map(([k, p]) => [k, asSchema(p)] as const)
-      .filter(([, p]) => p && ('const' in p || Array.isArray(p.enum)))
-    if (discriminators.length === 0) return false
-    return discriminators.every(([k, p]) =>
-      'const' in p! ? value[k] === p.const : (p!.enum as unknown[]).includes(value[k]),
-    )
-  })
-}
+  // each keyword only exists on the type it belongs to, so folding them is safe
+  const min = schema.minimum ?? schema.minLength ?? schema.minItems
+  const max = schema.maximum ?? schema.maxLength ?? schema.maxItems
 
-function resolveOneUnion(
-  branches: Schema[],
-  value: unknown,
-): { branch: Schema | undefined; nullable: boolean } {
-  const nullable = branches.some(isNullBranch)
-
-  if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
-    const discriminated = matchDiscriminatedBranch(branches, value as Record<string, unknown>)
-    if (discriminated) return { branch: discriminated, nullable }
-  } else if (value !== null && value !== undefined) {
-    const literal = branches.find((b) => branchLiteralMatches(b, value))
-    if (literal) return { branch: literal, nullable }
-  }
-
-  // type union (dominant case: nullable leaf). Prefer the non-null branch matching
-  // the value's type; else the first non-null branch, so constraints still surface
-  // when the value is currently null/absent.
-  // Ceiling: an undiscriminated union of the SAME base type (e.g. two `string`
-  // branches with different constraints) can't be disambiguated by type — we take
-  // the first matching branch. The old library couldn't resolve these either; such
-  // schemas don't occur in the zod/arktype output we target.
-  const nonNull = branches.filter((b) => !isNullBranch(b))
-  const byType =
-    value !== null && value !== undefined
-      ? nonNull.find((b) => typeMatchesValue(b, value))
-      : undefined
-  return { branch: byType ?? nonNull[0], nullable }
-}
-
-// Resolve nested unions until the node is no longer a union.
-function resolveUnionsDeep(
-  node: Schema,
-  value: unknown,
-): { node: Schema; nullable: boolean; wrapper: Schema | undefined } {
-  let nullable = typeNames(node).includes('null')
-  let wrapper: Schema | undefined
-  let branches = unionBranches(node)
-  while (branches) {
-    wrapper ??= node
-    const r = resolveOneUnion(branches, value)
-    nullable ||= r.nullable
-    if (!r.branch) break
-    node = r.branch
-    nullable ||= typeNames(node).includes('null')
-    branches = unionBranches(node)
-  }
-  return { node, nullable, wrapper }
-}
-
-function pickAnnotations(schema: Schema): SchemaMeta {
-  const out: Record<string, unknown> = {}
-  for (const key of META_KEYS) {
-    if (schema[key] !== undefined) out[key] = schema[key]
-  }
-  return out
-}
-
-// Union-level annotations (e.g. a `.describe()` that zod v4 places on the `anyOf`
-// wrapper of a nullable field) flow onto the resolved branch; inner-branch keys win.
-function mergeSharedAnnotations(wrapper: Schema | undefined, branch: Schema): Schema {
-  if (!wrapper) return branch
-  const shared: Record<string, unknown> = {}
-  for (const key of META_KEYS) {
-    if (wrapper[key] !== undefined && branch[key] === undefined) shared[key] = wrapper[key]
-  }
-  return Object.keys(shared).length > 0 ? { ...branch, ...shared } : branch
-}
-
-type Segment = { key: string; isIndex: boolean }
-
-function parsePath(path: string): Segment[] {
-  const segments: Segment[] = []
-  let key = ''
-  for (let i = 0; i < path.length; i++) {
-    if (path[i] === '\\' && path[i + 1] === '.') {
-      key += '.'
-      i++
-    } else if (path[i] === '.') {
-      if (key) segments.push({ key, isIndex: false })
-      key = ''
-    } else if (path[i] === '[') {
-      const end = path.indexOf(']', i)
-      const index = path.slice(i + 1, end)
-      if (end > i && /^\d+$/.test(index)) {
-        if (key) segments.push({ key, isIndex: false })
-        segments.push({ key: index, isIndex: true })
-        key = ''
-        i = end
-      } else {
-        key += path[i]
-      }
-    } else {
-      key += path[i]
-    }
-  }
-  if (key) segments.push({ key, isIndex: false })
-  return segments
-}
-
-function childSchema(node: Schema, seg: Segment, path: string): Schema | undefined {
-  if (scanUnsupported(node, path)) return
-
-  if (seg.isIndex) {
-    const i = Number(seg.key)
-    // tuple prefix (prefixItems = 2020-12; array `items` = draft-07), then the rest
-    // element (single `items` in 2020-12, `additionalItems` in draft-07).
-    const prefix = (node as { prefixItems?: JSONSchema7Definition[] }).prefixItems
-    if (Array.isArray(prefix) && prefix[i] !== undefined) return asSchema(prefix[i])
-    if (Array.isArray(node.items)) {
-      return asSchema(
-        node.items[i] ?? (node as { additionalItems?: JSONSchema7Definition }).additionalItems,
-      )
-    }
-    return asSchema(node.items)
-  }
-
-  const prop = asSchema(node.properties?.[seg.key])
-  if (prop) return prop
-  // records: additionalProperties schema
-  return asSchema(
-    typeof node.additionalProperties === 'object' ? node.additionalProperties : undefined,
+  return (
+    (min === undefined || n >= min) &&
+    (max === undefined || n <= max) &&
+    (schema.exclusiveMinimum === undefined || n > schema.exclusiveMinimum) &&
+    (schema.exclusiveMaximum === undefined || n < schema.exclusiveMaximum)
   )
 }
 
-function walk(root: Schema, segments: Segment[], data: unknown, path: string) {
-  let node: Schema = root
+/**
+ * Does `value` fit `schema`? Used to pick a union branch, so it only asks what a
+ * half-filled form can answer: anything not entered yet (`null`/`undefined`)
+ * fits, and a nested value is judged by its type and `const`/`enum` alone — a
+ * nested bound may legitimately be unmet while the user is still typing.
+ */
+function matches(schema: Schema, value: unknown, nested = false): boolean {
+  const union = branches(schema)
+  if (union) return union.some((branch) => matches(branch, value, nested))
+
+  if (value === null || value === undefined) return true
+  if (!typeMatches(schema, value)) return false
+  if ('const' in schema && schema.const !== value) return false
+  if (schema.enum && !schema.enum.includes(value)) return false
+  if (!nested && !boundsMatch(schema, value)) return false
+
+  if (schema.properties && typeof value === 'object' && !Array.isArray(value))
+    return Object.entries(schema.properties).every(([key, property]) => {
+      const child = asSchema(property)
+      return !child || matches(child, (value as Record<string, unknown>)[key], true)
+    })
+
+  if (Array.isArray(value))
+    return prefixItems(schema).every((item, index) => {
+      const child = asSchema(item)
+      return !child || matches(child, value[index], true)
+    })
+
+  return true
+}
+
+type Resolved = {
+  schema: Schema
+  meta: SchemaMeta
+  /** the schema encodes a nullable value, which this library treats as optional */
+  nullable: boolean
+}
+
+/** Leaf of the first-branch chain — the fallback when the value points at no branch. */
+function firstLeaf(schema: Schema): Schema {
+  for (let union = branches(schema); union; union = branches(schema)) schema = union[0]!
+  return schema
+}
+
+/**
+ * Descend into the union branch that fits `value`, inheriting annotations on the
+ * way down (the deeper branch wins). When no branch matches — the usual case for
+ * an empty field — the first branch is used and its leaf's annotations fill
+ * whatever the enclosing schemas left unset.
+ */
+function resolve(root: Schema, value: unknown): Resolved {
+  const empty = value === null || value === undefined
+  let schema = root
+  let meta = annotations(schema)
+  let nullable = false
+  let matched = true
+
+  for (let union = branches(schema); union; union = branches(schema)) {
+    nullable ||= union.some(isNullableSugar)
+
+    const match = empty ? union.find(isNull) : union.find((branch) => matches(branch, value))
+    matched &&= !empty && match !== undefined
+
+    schema = match ?? union[0]!
+    meta = { ...meta, ...annotations(schema) }
+  }
+
+  if (!matched) meta = { ...annotations(firstLeaf(root)), ...meta }
+
+  return { schema, meta, nullable }
+}
+
+function isArray(schema: Schema): boolean {
+  return types(schema).includes('array') || schema.items !== undefined
+}
+
+function child(schema: Schema, segment: string | number): Schema | undefined {
+  // a numeric segment indexes an array (`list[0]`), but dot-prop parses a numeric
+  // property name to a number too (`rec.0`), so both shapes have to be tried
+  const item =
+    typeof segment === 'number'
+      ? // tuple positions first, then the rest-element schema
+        (asSchema(prefixItems(schema)[segment]) ?? asSchema(schema.items))
+      : undefined
+
+  // `additionalProperties` is the value schema of a record
+  return item ?? asSchema(schema.properties?.[segment]) ?? asSchema(schema.additionalProperties)
+}
+
+type Location = {
+  schema: Schema
+  /** enclosing schema, union-resolved, `undefined` at the root */
+  parent: Schema | undefined
+  key: string | number | undefined
+  value: unknown
+}
+
+function walk(root: Schema, data: unknown, segments: (string | number)[]): Location | undefined {
+  let schema = root
   let parent: Schema | undefined
-  let curValue: unknown = data
+  let key: string | number | undefined
+  let value = data
 
-  for (const seg of segments) {
-    if (scanUnsupported(node, path)) return
-    node = resolveUnionsDeep(node, curValue).node
+  for (const segment of segments) {
+    parent = resolve(schema, value).schema
+    key = segment
 
-    parent = node
-    const next = childSchema(node, seg, path)
-    if (!next) return
-    node = next
+    const next = child(parent, key)
+    if (!next) return undefined
 
-    curValue =
-      curValue !== null && typeof curValue === 'object'
-        ? (curValue as Record<string, unknown>)[seg.key]
+    schema = next
+    value =
+      typeof value === 'object' && value !== null
+        ? (value as Record<string | number, unknown>)[key]
         : undefined
   }
 
-  return { node, parent, value: curValue }
+  return { schema, parent, key, value }
 }
 
-export function getSchemaMeta(jsonSchema: JSONSchema7, data: object, path: string): SchemaMeta {
-  const segments = parsePath(path)
-  const walked = walk(jsonSchema, segments, data, path)
-  if (!walked) return {}
+export function getSchemaMeta(jsonSchema: Schema, data: object, path: string): SchemaMeta {
+  // dot-prop parses the root path to [''] instead of []
+  const location = walk(jsonSchema, data, path ? parsePath(path) : [])
+  if (!location) return {}
 
-  const { parent } = walked
-  if (scanUnsupported(walked.node, path)) return {}
-  const { node, nullable, wrapper } = resolveUnionsDeep(walked.node, walked.value)
-  if (scanUnsupported(node, path)) return {}
-  const meta = pickAnnotations(mergeSharedAnnotations(wrapper, node))
+  const { parent, key } = location
+  const { meta, nullable } = resolve(location.schema, location.value)
 
-  const lastSeg = segments.at(-1)
-  if (!parent || !lastSeg) {
-    meta.required = true
-  } else if (lastSeg.isIndex) {
-    meta.required = false
-  } else {
-    const req = Array.isArray(parent.required) ? parent.required : []
-    meta.required = req.includes(lastSeg.key) && !nullable
-  }
+  const required =
+    parent === undefined || key === undefined || isArray(parent)
+      ? // the root and array elements exist as soon as their container does
+        !nullable
+      : !!parent.required?.includes(String(key)) && !nullable
 
-  return meta
+  return { ...meta, required }
 }

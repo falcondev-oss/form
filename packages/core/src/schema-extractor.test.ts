@@ -3,6 +3,7 @@ import { describe, expect, test } from 'vitest'
 import { z } from 'zod'
 import { getSchemaMeta } from './schema-extractor'
 import { toJsonSchema } from './schema-meta'
+import { escapePathSegment } from './util'
 
 describe('primitives', () => {
   test('draft-2020-12', () => {
@@ -414,7 +415,24 @@ describe('edge cases', () => {
     const jsonSchema = toJsonSchema(schema)
     expect(jsonSchema).toMatchSnapshot()
 
-    const meta = getSchemaMeta(jsonSchema, {}, 'a.b')
+    // field paths escape dots — an unescaped `a.b` addresses a nested `b` instead
+    const meta = getSchemaMeta(jsonSchema, {}, escapePathSegment('a.b'))
     expect(meta).toEqual({ required: true, description: 'A dot in the property name' })
+  })
+
+  test('numeric property name', () => {
+    const schema = z.object({
+      rec: z.record(z.string(), z.object({ nr: z.number().min(3) })),
+      list: z.array(z.object({ nr: z.number().min(3) })),
+    })
+    const jsonSchema = toJsonSchema(schema)
+    expect(jsonSchema).toMatchSnapshot()
+
+    // `rec.0` and `list[0]` both parse to a numeric segment, but only one is an index
+    const metaRecord = getSchemaMeta(jsonSchema, { rec: { 0: { nr: 1 } } }, 'rec.0.nr')
+    expect(metaRecord).toEqual({ required: true, minimum: 3 })
+
+    const metaItem = getSchemaMeta(jsonSchema, { list: [{ nr: 1 }] }, 'list[0].nr')
+    expect(metaItem).toEqual({ required: true, minimum: 3 })
   })
 })

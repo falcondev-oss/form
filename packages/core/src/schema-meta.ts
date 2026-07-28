@@ -1,5 +1,5 @@
 import type { ToJsonSchema } from '@ark/schema'
-import type { JSONSchema7 } from 'json-schema'
+import type { JSONSchema } from 'json-schema-typed'
 import type { $ZodTypeDef, ToJSONSchemaParams } from 'zod/v4/core'
 import type { StandardSchemasSpec } from './types'
 import { match } from 'ts-pattern'
@@ -82,7 +82,7 @@ export function toJsonSchema({ '~standard': standardSchema }: StandardSchemasSpe
 
   debugLog(() => ['libraryOptions', libraryOptions])
 
-  let jsonSchema: JSONSchema7 | undefined
+  let jsonSchema: JSONSchema.Interface | undefined
   try {
     jsonSchema = standardSchema.jsonSchema.input({
       target: 'draft-2020-12',

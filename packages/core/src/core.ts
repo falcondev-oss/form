@@ -1,8 +1,5 @@
-import type { ToJsonSchema } from '@ark/schema'
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type { ComputedRef, Ref } from '@vue/reactivity'
-import type { JSONSchema7 } from 'json-schema'
-import type { $ZodTypeDef, ToJSONSchemaParams } from 'zod/v4/core'
 import type { FieldOpts } from './field'
 import type {
   BuildFormFieldAccessors,
@@ -29,14 +26,7 @@ import { extend, setContext } from './types'
 import { debugLog, escapePathSegment, getFieldCachePath, pathSegmentsToPathString } from './util'
 
 type ArrayMutationMethod =
-  | 'push'
-  | 'pop'
-  | 'unshift'
-  | 'shift'
-  | 'splice'
-  | 'sort'
-  | 'reverse'
-  | 'fill'
+  'push' | 'pop' | 'unshift' | 'shift' | 'splice' | 'sort' | 'reverse' | 'fill'
 
 function clone<const T>(value: T): T {
   return klona(value)

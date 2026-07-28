@@ -24,6 +24,52 @@ exports[`edge cases > empty object 1`] = `
 }
 `;
 
+exports[`edge cases > numeric property name 1`] = `
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "list": {
+      "items": {
+        "properties": {
+          "nr": {
+            "minimum": 3,
+            "type": "number",
+          },
+        },
+        "required": [
+          "nr",
+        ],
+        "type": "object",
+      },
+      "type": "array",
+    },
+    "rec": {
+      "additionalProperties": {
+        "properties": {
+          "nr": {
+            "minimum": 3,
+            "type": "number",
+          },
+        },
+        "required": [
+          "nr",
+        ],
+        "type": "object",
+      },
+      "propertyNames": {
+        "type": "string",
+      },
+      "type": "object",
+    },
+  },
+  "required": [
+    "rec",
+    "list",
+  ],
+  "type": "object",
+}
+`;
+
 exports[`inference > discriminated union > discriminated unions – 'arktype' 1`] = `
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
