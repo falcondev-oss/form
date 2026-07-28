@@ -1,11 +1,11 @@
 import type { ToJsonSchema } from '@ark/schema'
 import type { JSONSchema } from 'json-schema-typed'
 import type { $ZodTypeDef, ToJSONSchemaParams } from 'zod/v4/core'
-import type { StandardSchemasSpec } from './types'
+import type { StandardSchemasSpec } from '../types'
 import { match } from 'ts-pattern'
-import { debugLog } from './util'
+import { debugLog } from '../util'
 
-export { getSchemaMeta } from './schema-extractor'
+export { getSchemaMeta } from './metadata-extractor'
 
 export function toJsonSchema({ '~standard': standardSchema }: StandardSchemasSpec) {
   debugLog(() => ['standardSchema', standardSchema])

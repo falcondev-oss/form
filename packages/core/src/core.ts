@@ -21,7 +21,7 @@ import { hasAtLeast, hasSubObject, isArray } from 'remeda'
 import { match, P } from 'ts-pattern'
 import { FormField } from './field'
 import { toReactive } from './reactive'
-import { toJsonSchema } from './schema-meta'
+import { toJsonSchema } from './json-schema'
 import { extend, setContext } from './types'
 import { debugLog, escapePathSegment, getFieldCachePath, pathSegmentsToPathString } from './util'
 

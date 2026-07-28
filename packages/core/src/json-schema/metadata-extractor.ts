@@ -9,7 +9,7 @@
  * one of them yields `{}`.
  */
 import type { JSONSchema } from 'json-schema-typed'
-import type { SchemaMeta } from './types'
+import type { SchemaMeta } from '../types'
 import { parsePath } from 'dot-prop'
 
 type Schema = JSONSchema.Interface

@@ -17,7 +17,7 @@ import { computed, reactive, ref, shallowReadonly, toRaw, toRefs, watch } from '
 import { deleteProperty, setProperty } from 'dot-prop'
 import { isDeepEqual } from 'remeda'
 import { refEffect } from './reactive'
-import { getSchemaMeta } from './schema-meta'
+import { getSchemaMeta } from './json-schema'
 import { extend, setContext } from './types'
 import { getFieldCachePath, getProperty, pathSegmentsToPathString } from './util'
 

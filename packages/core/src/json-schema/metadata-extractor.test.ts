@@ -1,9 +1,9 @@
 import { type } from 'arktype'
 import { describe, expect, test } from 'vitest'
 import { z } from 'zod'
-import { getSchemaMeta } from './schema-extractor'
-import { toJsonSchema } from './schema-meta'
-import { escapePathSegment } from './util'
+import { getSchemaMeta } from './metadata-extractor'
+import { toJsonSchema } from '.'
+import { escapePathSegment } from '../util'
 
 describe('primitives', () => {
   test('draft-2020-12', () => {
