@@ -7,7 +7,6 @@ import type {
   IsAny,
   IsLiteral,
   IsNever,
-  IsNull,
   IsSymbolLiteral,
   IsTuple,
   IsUnion,
@@ -262,7 +261,7 @@ export type BuildFormFieldAccessors<T, StopDiscriminator = false, _Root extends 
   IsAny<T>,
 ] extends [true]
   ? FormFieldAccessor<any> | FormFieldDiscriminatorAccessor<any, PropertyKey>
-  : [IsNull<T>] extends [true]
+  : [IsNever<NonNullable<T>>] extends [true]
     ? FormFieldAccessor<T>
     : [NonNullable<T>] extends [infer TT extends unknown[]]
       ? {

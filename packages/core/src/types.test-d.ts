@@ -7,7 +7,7 @@ import type {
   GetDiscriminator,
   NullableDeep,
 } from './types'
-import { assertType, describe, test } from 'vitest'
+import { assertType, describe, expectTypeOf, test } from 'vitest'
 import z from 'zod'
 import { useFormCore } from './core'
 
@@ -260,5 +260,32 @@ describe('FormField', () => {
         }>
       >,
     )
+  })
+
+  test('null-only fields are leaf accessors, not arrays', () => {
+    // z.null().optional() / z.undefined().optional() → null | undefined
+    assertType<FormFieldAccessor<null | undefined>>({} as BuildFormFieldAccessors<null | undefined>)
+    expectTypeOf<BuildFormFieldAccessors<null | undefined>>().not.toHaveProperty('at')
+    expectTypeOf<BuildFormFieldAccessors<null | undefined>>().not.toHaveProperty('delete')
+
+    expectTypeOf<BuildFormFieldAccessors<undefined>>().not.toHaveProperty('at')
+    expectTypeOf<BuildFormFieldAccessors<never>>().not.toHaveProperty('at')
+
+    // regression guard: real arrays keep their accessors
+    expectTypeOf<BuildFormFieldAccessors<string[] | null>>().toHaveProperty('at')
+  })
+
+  test('discriminated-union filler props are leaf accessors', () => {
+    const form = useFormCore({
+      schema: z.discriminatedUnion('type', [
+        z.object({ type: z.literal('a'), value: z.null().optional() }),
+        z.object({ type: z.literal('b'), value: z.object({ url: z.string() }) }),
+      ]),
+      sourceValues: { type: 'a' as const },
+      async submit() {},
+    })
+
+    const branch = form.fields.$use({ discriminator: 'type' })
+    if (branch.type === 'a') expectTypeOf(branch.$field.value).not.toHaveProperty('at')
   })
 })
