@@ -81,7 +81,7 @@ describe('react', () => {
   })
 
   // https://github.com/falcondev-oss/form/issues/8
-  test.only('sourceValues update during failed submit does not trigger reset', async () => {
+  test('sourceValues update during failed submit does not trigger reset', async () => {
     // blocks the submit handler until the test releases it
     const submitGate = deferred()
     const submitEntered = deferred()
