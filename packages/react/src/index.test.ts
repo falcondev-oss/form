@@ -68,6 +68,35 @@ describe('react', () => {
     expect(result.all.length).toEqual(2)
   })
 
+  // https://github.com/falcondev-oss/form/issues/8
+  test('inline sourceValues object does not cancel submit', async () => {
+    const submit = vi.fn(async () => {})
+
+    const { result: form } = renderHook(() =>
+      useForm({
+        schema: z.object({
+          password: z.string().min(1),
+        }),
+        // inline object -> new identity on every re-render
+        sourceValues: { password: null },
+        submit,
+      }),
+    )
+
+    act(() => {
+      form.current.fields.password.$use().model.onUpdate('hunter2')
+    })
+    expect(form.current.data.password).toEqual('hunter2')
+
+    await act(async () => {
+      await form.current.submit()
+    })
+
+    // the re-render caused by isSubmitting must not reset the form
+    expect(form.current.data.password).toEqual('hunter2')
+    expect(submit).toHaveBeenCalledWith({ values: { password: 'hunter2' } })
+  })
+
   test('reactivity', () => {
     const {
       result: { current: form },
