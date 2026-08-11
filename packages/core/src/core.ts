@@ -55,7 +55,8 @@ export function useFormCore<
   const isDirty = computed(() => formUpdateCount.value !== 0)
   const isPending = ref(false)
   const isSubmitting = ref(false)
-  const isLoading = computed(() => isSubmitting.value || isPending.value)
+  const isValidating = ref(false)
+  const isLoading = computed(() => isPending.value || isValidating.value || isSubmitting.value)
   const disabled = computed<boolean>(() => isLoading.value || (toValue(formOpts.disabled) ?? false))
 
   const formError = ref<StandardSchemaV1.FailureResult>()
@@ -78,9 +79,15 @@ export function useFormCore<
     { immediate: true },
   )
 
+  let queueReset = false
   watch(sourceValues, () => {
-    // allow updating source values during submit
-    if (isDirty.value && !isSubmitting.value) {
+    if (isSubmitting.value) {
+      queueReset = true
+      debugLog(() => ['useForm: Queued reset after successful submit'])
+      return
+    }
+
+    if (isDirty.value) {
       /* TODO: update all untouched fields & show info on outdated fields.
         form.sourceValues + sourceValues.timestamp
 
@@ -362,27 +369,35 @@ export function useFormCore<
     reset,
     submit: async () => {
       await hooks.callHook('beforeSubmit', { data: observedFormData })
-      isSubmitting.value = true
+      isValidating.value = true
 
       try {
         const validationResult = await validateForm()
         if (!validationResult) {
-          isSubmitting.value = false
+          isValidating.value = false
 
           const result = { success: false }
           await hooks.callHook('afterSubmit', result)
           return result
         }
+        isValidating.value = false
 
         const ctx = { values: validationResult }
+        isSubmitting.value = true
         const submitResult = (await formOpts.submit(ctx)) ?? { success: true }
+        isSubmitting.value = false
 
-        // don't reset because we don't want to overwrite the form data with the old sourceValues (updates to sourceValues are handled by the watcher)
-        // only set formUpdateCount to 0 to mark the form as pristine
+        // don't reset because we don't want to overwrite the form data with the old sourceValues
+        // (updates to sourceValues are handled by the watcher)
+        // -> only set formUpdateCount to 0 to mark the form as pristine
         if (submitResult.success) formUpdateCount.value = 0
 
-        isSubmitting.value = false
         await hooks.callHook('afterSubmit', submitResult)
+
+        if (queueReset) {
+          queueReset = false
+          if (submitResult.success) reset()
+        }
 
         return submitResult
       } catch (err) {
