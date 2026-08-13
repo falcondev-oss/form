@@ -75,6 +75,100 @@ describe('form', () => {
     expect(spy).toHaveBeenCalledWith('Isaac Newton')
   })
 
+  describe('host objects (File/Blob)', () => {
+    test('form.data returns raw host objects with working native getters', () => {
+      const form = useFormCore({
+        schema: z.object({
+          name: z.string(),
+          files: z.array(z.instanceof(File)).nullable(),
+        }),
+        sourceValues: () => ({ name: '', files: null }),
+        async submit() {},
+      })
+
+      const file = new File(['hello'], 'greeting.txt', { type: 'text/plain' })
+      form.fields.files.$use().handleChange([file])
+
+      // form.data must return the raw File, not a proxy wrapping it
+      const fromData = form.data.files?.[0]
+      expect(fromData).toBe(file)
+      expect(fromData?.name).toBe('greeting.txt')
+      expect(fromData?.size).toBe(5)
+      expect(fromData?.type).toBe('text/plain')
+      expect(typeof fromData?.arrayBuffer).toBe('function')
+
+      // field.value must return the same raw object identity
+      const filesField = form.fields.files.$use()
+      expect(filesField.value?.[0]).toBe(file)
+
+      // ...and stay raw after an unrelated form change + re-validation
+      form.fields.name.$use().handleChange('changed')
+      expect(form.data.files?.[0]).toBe(file)
+      expect(form.fields.files.$use().value?.[0]).toBe(file)
+    })
+
+    test('blob values are returned raw', () => {
+      const form = useFormCore({
+        schema: z.object({
+          blob: z.instanceof(Blob).nullable(),
+        }),
+        sourceValues: () => ({ blob: null }),
+        async submit() {},
+      })
+
+      const blob = new Blob(['abc'], { type: 'application/octet-stream' })
+      form.fields.blob.$use().handleChange(blob)
+
+      expect(form.data.blob).toBe(blob)
+      expect(form.data.blob?.size).toBe(3)
+      expect(form.data.blob?.type).toBe('application/octet-stream')
+    })
+
+    test('host objects in sourceValues survive cloning and reset', () => {
+      const file = new File(['hello'], 'greeting.txt', { type: 'text/plain' })
+      const form = useFormCore({
+        schema: z.object({
+          file: z.instanceof(File),
+        }),
+        sourceValues: () => ({ file }),
+        async submit() {},
+      })
+
+      // klona clones sourceValues by reference for host objects
+      expect(form.data.file).toBe(file)
+      expect(form.data.file?.name).toBe('greeting.txt')
+
+      form.fields.file.$use().handleChange(new File(['other'], 'other.txt'))
+      expect(form.data.file).not.toBe(file)
+
+      form.reset()
+      expect(form.data.file).toBe(file)
+      expect(form.data.file?.name).toBe('greeting.txt')
+    })
+
+    test('dirty tracking fires when a file field changes', () => {
+      const form = useFormCore({
+        schema: z.object({
+          files: z.array(z.instanceof(File)).nullable(),
+        }),
+        sourceValues: () => ({ files: null }),
+        async submit() {},
+      })
+
+      const spy = vi.fn()
+      watch(
+        () => form.data.files,
+        (value) => void spy(value),
+      )
+
+      expect(form.isDirty).toBe(false)
+      form.fields.files.$use().handleChange([new File(['x'], 'a.txt')])
+
+      expect(form.isDirty).toBe(true)
+      expect(spy).toHaveBeenCalled()
+    })
+  })
+
   describe('sourceValues', () => {
     test('forbid updates when dirty', () => {
       const sourceValues = ref({
