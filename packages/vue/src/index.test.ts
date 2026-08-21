@@ -1,10 +1,10 @@
 import { describe, expect, test, vi } from 'vitest'
-import { isReactive, watch } from 'vue'
+import { nextTick, watch } from 'vue'
 import z from 'zod'
 import { useForm } from '.'
 
 describe('vue', () => {
-  test('reactivity', () => {
+  test('reactivity', async () => {
     const form = useForm({
       schema: z.object({
         name: z.string(),
@@ -15,20 +15,23 @@ describe('vue', () => {
       async submit() {},
     })
 
-    expect(isReactive(form)).toBe(true)
-
     const dataWatcher = vi.fn()
-    watch(() => form.data.name, dataWatcher, { flush: 'sync' })
+    watch(() => form.data.name, dataWatcher)
     const isChangedWatcher = vi.fn()
-    watch(() => form.isChanged, isChangedWatcher, { flush: 'sync' })
+    watch(() => form.isChanged, isChangedWatcher)
 
     form.data.name = 'Jane Doe'
+    expect(dataWatcher).not.toHaveBeenCalled() // writes are batched until the next flush
+
+    form['~'].flush()
+    await nextTick()
 
     expect(dataWatcher).toHaveBeenCalledOnce()
-    expect(isChangedWatcher).toHaveBeenCalledOnce()
+    expect(dataWatcher.mock.calls[0]?.slice(0, 2)).toEqual(['Jane Doe', 'John Doe'])
+    expect(isChangedWatcher.mock.calls[0]?.slice(0, 2)).toEqual([true, false])
   })
 
-  test('model', () => {
+  test('model', async () => {
     const form = useForm({
       schema: z.object({
         name: z.string(),
@@ -43,6 +46,8 @@ describe('vue', () => {
 
     expect(form.fields.name.$use().model).toEqual('John Doe')
     form.fields.name.$use().model = 'Jane Doe'
+    form['~'].flush()
+    await nextTick()
     expect(form.fields.name.$use().model).toEqual('Jane Doe')
     expect(form.data.name).toEqual('Jane Doe')
 
@@ -55,10 +60,12 @@ describe('vue', () => {
 
     const modelWatcher = vi.fn()
     const valueWatcher = vi.fn()
-    watch(() => field.model, modelWatcher, { flush: 'sync' })
-    watch(() => field.value, valueWatcher, { flush: 'sync' })
+    watch(() => field.model, modelWatcher)
+    watch(() => field.value, valueWatcher)
 
     field.model = new Date('2002-01-01')
+    form['~'].flush()
+    await nextTick()
 
     expect(valueWatcher).toHaveBeenCalledOnce()
     expect(modelWatcher).toHaveBeenCalledOnce()
