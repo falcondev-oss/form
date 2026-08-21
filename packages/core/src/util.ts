@@ -23,16 +23,56 @@ export function pathSegmentsToPathString(
   return path
 }
 
-export async function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
 export function escapePathSegment(segment: string) {
   return segment.replaceAll('.', String.raw`\.`)
 }
 
-export function getFieldCachePath(path: string) {
-  return `${path.replaceAll('[', '._array[')}`
+export type ParsedSegment = { kind: 'prop'; key: string } | { kind: 'index'; index: number }
+
+/** Parses a form path string (`a.b[2].c`, dots escapable via `\.`) into segments. */
+export function parsePath(path: string): ParsedSegment[] {
+  const segments: ParsedSegment[] = []
+  let buf = ''
+
+  const flushBuf = () => {
+    if (buf !== '') segments.push({ kind: 'prop', key: buf })
+    buf = ''
+  }
+
+  for (let i = 0; i < path.length; i++) {
+    const char = path[i]
+    if (char === '\\' && i + 1 < path.length) {
+      buf += path[i + 1]
+      i++
+    } else if (char === '.') {
+      flushBuf()
+    } else if (char === '[') {
+      flushBuf()
+      const end = path.indexOf(']', i)
+      segments.push({ kind: 'index', index: Number(path.slice(i + 1, end)) })
+      i = end
+    } else {
+      buf += char
+    }
+  }
+  flushBuf()
+
+  return segments
+}
+
+/** Normalizes a Standard Schema issue path to plain keys (numeric strings become numbers). */
+export function issuePathKeys(
+  issuePath: readonly (PropertyKey | StandardSchemaV1.PathSegment)[] | undefined,
+): PropertyKey[] {
+  if (!issuePath) return []
+  return issuePath.map((segment) => {
+    const key = typeof segment === 'object' ? segment.key : segment
+    return typeof key === 'string' && /^\d+$/.test(key) ? Number(key) : key
+  })
+}
+
+export async function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 export const getProperty = ((

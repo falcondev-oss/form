@@ -1,4 +1,4 @@
-export { useFormCore } from './core'
+export { useFormCore, subscribeFormUpdates, resolveMaybeGetter } from './core'
 
 export {
   extend,

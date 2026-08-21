@@ -1,10 +1,8 @@
 import { act, renderHook } from '@testing-library/react'
-import { isReactive, watch } from '@vue/reactivity'
 import { useState } from 'react'
 import { describe, expect, test, vi } from 'vitest'
 import z from 'zod'
 import { useField, useForm } from '.'
-import { tick } from './util'
 
 type Deferred = { promise: Promise<void>; resolve: () => void }
 function deferred(): Deferred {
@@ -32,19 +30,14 @@ describe('react', () => {
     })
 
     expect(form.current.fields.name.$use().model.value).toEqual('John Doe')
-
     expect(renderCount).toEqual(1)
-    const previousTick = form.current.fields.name.$use()[tick]
 
-    act(() => {
+    await act(async () => {
       form.current.fields.name.$use().model.onUpdate('Jane Doe')
     })
 
-    // check if react component update occurred
-    const currentTick = form.current.fields.name.$use()[tick]
+    // react component update occurred after the flushed change
     expect(renderCount).toEqual(2)
-
-    expect(previousTick).toBeLessThan(currentTick)
 
     expect(form.current.fields.name.$use().model.value).toEqual('Jane Doe')
     expect(form.current.data?.name).toEqual('Jane Doe')
@@ -72,17 +65,16 @@ describe('react', () => {
     })
     expect(renderCount).toEqual(1)
 
-    act(() => {
+    await act(async () => {
       nameField.handleChange('Jane Doe')
     })
 
-    // check if react component update occurred
     expect(renderCount).toEqual(2)
+    expect(nameField.value).toEqual('Jane Doe')
   })
 
   // https://github.com/falcondev-oss/form/issues/8
   test('sourceValues update during failed submit does not trigger reset', async () => {
-    // blocks the submit handler until the test releases it
     const submitGate = deferred()
     const submitEntered = deferred()
 
@@ -107,22 +99,20 @@ describe('react', () => {
       })
     })
 
-    act(() => {
+    await act(async () => {
       form.current.fields.password.$use().model.onUpdate('123456')
     })
     expect(form.current.data.password).toEqual('123456')
 
     let submitPromise!: Promise<unknown>
-    act(() => {
+    await act(async () => {
       submitPromise = form.current.submit()
     })
-
-    // wait until the submit handler is running
     await submitEntered.promise
 
-    // new sourceValues arrive mid-submit (e.g. a refetch resolving) -> must be ignored,
+    // new sourceValues arrive mid-submit -> must be ignored,
     // because the form is dirty and a submit is already in flight
-    act(() => {
+    await act(async () => {
       setSourceValues({ password: 'mid-submit' })
     })
     expect(form.current.data.password).toEqual('123456')
@@ -136,31 +126,26 @@ describe('react', () => {
     expect(form.current.data.password).toEqual('123456')
   })
 
-  test('reactivity', () => {
-    const {
-      result: { current: form },
-    } = renderHook(() =>
-      useForm({
+  test('data writes trigger rerender', async () => {
+    let renderCount = 0
+    const { result: form } = renderHook(() => {
+      renderCount++
+      return useForm({
         schema: z.object({
           name: z.string(),
         }),
-        sourceValues: () => ({
+        sourceValues: {
           name: 'John Doe',
-        }),
+        },
         async submit() {},
-      }),
-    )
+      })
+    })
 
-    expect(isReactive(form)).toBe(true)
+    await act(async () => {
+      form.current.data.name = 'Jane Doe'
+    })
 
-    const dataWatcher = vi.fn()
-    watch(() => form.data.name, dataWatcher)
-    const isChangedWatcher = vi.fn()
-    watch(() => form.isChanged, isChangedWatcher)
-
-    form.data.name = 'Jane Doe'
-
-    expect(dataWatcher).toHaveBeenCalledOnce()
-    expect(isChangedWatcher).toHaveBeenCalledOnce()
+    expect(renderCount).toEqual(2)
+    expect(form.current.data.name).toEqual('Jane Doe')
   })
 })
