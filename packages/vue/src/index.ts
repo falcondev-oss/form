@@ -4,13 +4,14 @@ import type {
   FormSchema,
   FormSourceValues,
 } from '@falcondev-oss/form-core'
-import type { MaybeRefOrGetter, WritableComputedRef } from 'vue'
+import type { MaybeRefOrGetter, ShallowRef } from 'vue'
 import { extend, useFormCore } from '@falcondev-oss/form-core'
-import { computed, reactive, toValue } from 'vue'
+import { createSignal, flush } from '@solidjs/signals'
+import { computed, onScopeDispose, reactive, shallowRef, toValue, triggerRef, watch } from 'vue'
 
 declare module '@falcondev-oss/form-core' {
   interface FormFieldExtend<T> {
-    model: WritableComputedRef<T>
+    model: T
   }
 }
 
@@ -50,28 +51,61 @@ export function useFormHandles(forms: MaybeRefOrGetter<FormHandle[]>) {
   return handle satisfies FormHandle
 }
 
+/** feeds a Vue ref/getter into a Solid signal */
+function toSignal<T>(source: MaybeRefOrGetter<T>): () => T {
+  const [get, set] = createSignal(toValue(source) as Exclude<T, Function>)
+  watch(
+    () => toValue(source),
+    (value) => set(() => value),
+    { flush: 'sync' },
+  )
+  return get
+}
+
+export type FormOptionsVue<
+  Schema extends FormSchema,
+  SourceValues extends FormSourceValues<Schema> = FormSourceValues<Schema>,
+> = Omit<FormOptions<Schema, SourceValues>, 'sourceValues' | 'disabled'> & {
+  sourceValues: MaybeRefOrGetter<SourceValues>
+  disabled?: MaybeRefOrGetter<boolean>
+}
+
 export function useForm<
   const Schema extends FormSchema,
   SourceValues extends FormSourceValues<Schema> = FormSourceValues<Schema>,
 >(
-  opts: FormOptions<Schema, SourceValues>,
-): ReturnType<typeof useFormCore<Schema, SourceValues>> & { _v: 'new' } {
+  opts: FormOptionsVue<Schema, SourceValues>,
+): ReturnType<typeof useFormCore<Schema, SourceValues>> {
+  // one Vue trigger per form/field api, bumped after every flush that changed it
+  const triggers = new WeakMap<object, ShallowRef<number>>()
+  function trigger(scope: object) {
+    let ref = triggers.get(scope)
+    if (!ref) triggers.set(scope, (ref = shallowRef(0)))
+    return ref
+  }
+
   const form = useFormCore({
     ...opts,
+    sourceValues: toSignal(opts.sourceValues),
+    disabled: toSignal(() => toValue(opts.disabled) ?? false),
     [extend]: {
-      $use: (field) => {
-        const model = computed({
-          get: () => field.value,
-          set: (v) => field.handleChange(v),
-        })
-
-        return { model }
-      },
+      track: (scope) => void trigger(scope).value,
+      $use: (field) => ({
+        get model() {
+          return field.value
+        },
+        set model(value) {
+          field.handleChange(value)
+          flush()
+        },
+      }),
     },
   })
 
-  // TODO: remove _v type flag
-  return Object.assign(form, { _v: 'new' } as const)
+  form['~'].subscribe((scope) => triggerRef(trigger(scope)))
+  onScopeDispose(form['~'].dispose, true)
+
+  return form
 }
 
 export type {
@@ -82,4 +116,3 @@ export type {
   FormHandle,
   NullableDeep,
 } from '@falcondev-oss/form-core'
-export { refEffect } from '@falcondev-oss/form-core/reactive'

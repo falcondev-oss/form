@@ -1,4 +1,5 @@
-export { useFormCore } from './core'
+export { type FormInternals, useFormCore } from './core'
+export { toValue } from './util'
 
 export {
   extend,

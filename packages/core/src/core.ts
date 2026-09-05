@@ -1,6 +1,5 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
-import type { ComputedRef, Ref } from '@vue/reactivity'
-import type { FieldOpts } from './field'
+import type { Form, Location, Segment } from './field'
 import type {
   BuildFormFieldAccessors,
   FormData,
@@ -12,408 +11,498 @@ import type {
   FormSchema,
   FormSourceValues,
 } from './types'
-import { computed, markRaw, reactive, ref, toRaw, toValue, watch } from '@vue/reactivity'
-import { deleteProperty, getProperty, setProperty } from 'dot-prop'
+import {
+  createEffect,
+  createMemo,
+  createRoot,
+  createSignal,
+  createStore,
+  deep,
+  flush,
+  getOwner,
+  isWrappable,
+  reconcile,
+  runWithOwner,
+  snapshot,
+} from '@solidjs/signals'
 import { createHooks } from 'hookable'
 import { klona } from 'klona/full'
-import onChange from 'on-change'
-import { hasAtLeast, hasSubObject, isArray } from 'remeda'
-import { match, P } from 'ts-pattern'
+import { hasAtLeast, hasSubObject } from 'remeda'
 import { FormField } from './field'
-import { toReactive } from './reactive'
 import { toJsonSchema } from './json-schema'
-import { extend, setContext } from './types'
-import { debugLog, escapePathSegment, getFieldCachePath, pathSegmentsToPathString } from './util'
+import { extend } from './types'
+import { debugLog, toValue } from './util'
 
-type ArrayMutationMethod =
-  'push' | 'pop' | 'unshift' | 'shift' | 'splice' | 'sort' | 'reverse' | 'fill'
-
-function clone<const T>(value: T): T {
-  return klona(value)
+/**
+ * Field cache mirroring the data tree. Object properties and primitive array elements are keyed
+ * positionally, object array elements by the identity of their store node so they follow the datum.
+ */
+type CacheNode = {
+  field?: FormField<unknown, any>
+  children: Map<string | number, CacheNode>
+  elements: WeakMap<object, CacheNode>
+}
+function cacheNode(): CacheNode {
+  return { children: new Map(), elements: new WeakMap() }
 }
 
-// $field can be undefined if the field was never accessed via $use() directly
-// e.g. only an array item was accessed -> 'array.$field' is never set
-type FieldCacheItem = {
-  $field: FormField<unknown, any> | undefined
-  _array?: (FieldCacheItem | undefined)[]
+const ARRAY_MUTATORS = new Set<PropertyKey>([
+  'push',
+  'pop',
+  'shift',
+  'unshift',
+  'splice',
+  'sort',
+  'reverse',
+  'fill',
+  'copyWithin',
+])
+
+/** store node (object/array proxy) as opposed to a primitive or opaque leaf */
+function isNode(value: unknown): value is object {
+  return isWrappable(value)
 }
-export type FieldCache = Record<string, FieldCacheItem | undefined>
+
+const RAW = Symbol('raw')
+function unwrapFacade(value: unknown) {
+  return (isNode(value) && (value as { [RAW]?: object })[RAW]) || value
+}
+function normalizeKey(target: unknown, key: string | number) {
+  return Array.isArray(target) && typeof key === 'string' && /^\d+$/.test(key) ? Number(key) : key
+}
+/** array elements that are nodes are addressed by identity, everything else by key */
+function childSegment(parent: object, key: string | number, value: unknown): Segment {
+  return Array.isArray(parent) && isNode(value) ? { el: value } : key
+}
+
+export type FormInternals = {
+  /** synchronously apply pending writes (test/imperative escape hatch, validation stays async) */
+  flush: () => void
+  /** invoked after every flush that changed state readable through `scope` (form or field api) */
+  subscribe: (listener: (scope: object) => void) => () => void
+  dispose: () => void
+}
 
 export function useFormCore<
   const Schema extends FormSchema,
   SourceValues extends FormSourceValues<Schema> = FormSourceValues<Schema>,
   const Data extends FormData<Schema> = FormData<Schema>,
 >(formOpts: FormOptions<Schema, SourceValues>) {
-  const hooks = createHooks<FormHookDefinitions<Schema>>()
-  if (formOpts.hooks) hooks.addHooks(formOpts.hooks)
+  return createRoot((dispose) => {
+    const owner = getOwner()
+    const hooks = createHooks<FormHookDefinitions<Schema>>()
+    if (formOpts.hooks) hooks.addHooks(formOpts.hooks)
 
-  const sourceValues = computed(() => toValue(formOpts.sourceValues)) as ComputedRef<
-    Data | undefined
-  >
-  const formUpdateCount = ref(0)
-  const isDirty = computed(() => formUpdateCount.value !== 0)
-  const isPending = ref(false)
-  const isSubmitting = ref(false)
-  const isValidating = ref(false)
-  const isLoading = computed(() => isPending.value || isValidating.value || isSubmitting.value)
-  const disabled = computed<boolean>(() => isLoading.value || (toValue(formOpts.disabled) ?? false))
-
-  const formError = ref<StandardSchemaV1.FailureResult>()
-  const formDataRef = ref(clone(sourceValues.value ?? {})) as Ref<Data>
-  const formData = toReactive(formDataRef) as Data
-
-  function reset() {
-    debugLog(() => ['useForm: reset()'])
-
-    formDataRef.value = clone(sourceValues.value ?? ({} as Data))
-    formUpdateCount.value = 0
-    formError.value = undefined
-  }
-
-  watch(
-    sourceValues,
-    () => {
-      isPending.value = sourceValues.value === undefined
-    },
-    { immediate: true },
-  )
-
-  let queueReset = false
-  watch(sourceValues, () => {
-    if (isSubmitting.value) {
-      queueReset = true
-      debugLog(() => ['useForm: Queued reset after successful submit'])
-      return
+    const track = formOpts[extend]?.track ?? (() => {})
+    const listeners = new Set<(scope: object) => void>()
+    function notify(scope: object) {
+      for (const listener of listeners) {
+        // an uncaught error inside an effect halts the whole reactive system
+        try {
+          listener(scope)
+        } catch (err) {
+          console.error(err)
+        }
+      }
     }
 
-    if (isDirty.value) {
-      /* TODO: update all untouched fields & show info on outdated fields.
-        form.sourceValues + sourceValues.timestamp
+    const sourceValues = createMemo(() => toValue(formOpts.sourceValues) as Data | undefined)
+    const [isPristine, setIsPristine] = createSignal(true)
+    const isPending = createMemo(() => sourceValues() === undefined)
+    const [isSubmitting, setIsSubmitting] = createSignal(false)
+    const [isValidating, setIsValidating] = createSignal(false)
+    const isLoading = createMemo(() => isPending() || isValidating() || isSubmitting())
+    const disabled = createMemo(() => isLoading() || (toValue(formOpts.disabled) ?? false))
+    // equals: false so a whole-form validation always redistributes issues to the fields,
+    // even when the form error stays undefined
+    const [formError, setFormError] = createSignal<StandardSchemaV1.FailureResult | undefined>(
+      undefined,
+      { equals: false },
+    )
 
-        field.isTouched.timestamp > sourceValues.timestamp: field was changed normally (option: undo)
-        field.isTouched.timestamp < sourceValues.timestamp: field is outdated (option: update)
-      */
-      console.warn('useForm:', 'Skipped sourceValues update after form was edited')
-      return
+    const [store, setStore] = createStore<{ data: object }>({ data: sourceValues() ?? {} })
+
+    function reset() {
+      debugLog(() => ['useForm: reset()'])
+
+      setStore((s) => {
+        reconcile(sourceValues() ?? {}, formOpts.key ?? null)(s.data)
+      })
+      setIsPristine(true)
+      setFormError(undefined)
     }
 
-    reset()
-  })
+    let queueReset = false
+    createEffect(
+      () => sourceValues(),
+      () => {
+        if (isSubmitting()) {
+          queueReset = true
+          debugLog(() => ['useForm: Queued reset after successful submit'])
+          return
+        }
 
-  const standardSchema = formOpts.schema['~standard']
-  const jsonSchema = toJsonSchema(formOpts.schema)
+        if (!isPristine()) {
+          console.warn('useForm:', 'Skipped sourceValues update after form was edited')
+          return
+        }
 
-  const fieldCache: FieldCache = {}
+        reset()
+      },
+      { defer: true },
+    )
 
-  const iteratorFieldsCache = new Map<string, ComputedRef<BuildFormFieldAccessors<any>[]>>()
+    const standardSchema = formOpts.schema['~standard']
+    const jsonSchema = toJsonSchema(formOpts.schema)
 
-  const observedFormData = onChange(
-    formData,
-    (path, _value, _previousValue, _applyData) => {
-      formUpdateCount.value++
+    /** walks the store from the root, tracking every read */
+    function resolve(segments: Segment[]): Location {
+      const steps: Location['steps'] = []
+      let parent: object | undefined = store
+      let key: string | number = 'data'
+      for (const segment of segments) {
+        const container: unknown = parent && (parent as Record<string, unknown>)[key]
+        parent = isNode(container) ? container : undefined
+        if (typeof segment === 'object') {
+          key = Array.isArray(parent) ? parent.indexOf(segment.el) : -1
+          // element no longer in its array
+          if (key === -1) return { steps, value: undefined, detached: true }
+        } else key = normalizeKey(parent, segment)
+        steps.push({ parent, key, value: parent && (parent as Record<string, unknown>)[key] })
+      }
+      return { steps, value: steps.length ? steps.at(-1)!.value : store.data, detached: false }
+    }
 
-      const cachedField = getProperty(
-        fieldCache,
-        getFieldCachePath(pathSegmentsToPathString(path)),
-        undefined,
-      )
-      void cachedField?.$field?.validate()
-    },
-    {
-      ignoreDetached: true,
-      ignoreSymbols: true,
-      ignoreKeys: ['__v_raw'],
-      pathAsArray: true,
-      onValidate(path_, value, previousValue, applyData) {
-        const path = path_ as unknown as string[] // pathAsArray: true
+    const rootCache = cacheNode()
+    /** walks the field cache alongside the data, swapping index segments for element identity */
+    function locate(segments: Segment[], create: boolean) {
+      const { steps, detached } = resolve(segments)
+      if (detached) return
 
-        const cachedField = getProperty(
-          fieldCache,
-          getFieldCachePath(pathSegmentsToPathString(path)),
-          undefined,
-        )
-        const array = cachedField?._array
-        if (!cachedField || !isArray(array)) return true
+      let node = rootCache
+      const identitySegments: Segment[] = []
+      for (const { parent, key, value } of steps) {
+        const segment = parent ? childSegment(parent, key, value) : key
+        identitySegments.push(segment)
 
-        // keep fieldCache array structure & order in sync with data to prevent wrong item cache access
-        match(applyData as { name: ArrayMutationMethod; args: unknown[] } | undefined)
-          .with({ name: P.union('pop', 'shift', 'reverse') }, ({ name, args }) => {
-            // @ts-expect-error args can be spread
-            array[name]?.(...args)
-          })
-          .with({ name: 'splice' }, ({ args }) => {
-            const [start, deleteCount, ...items] = args as Parameters<[]['splice']>
-            array.splice(start, deleteCount, ...items.map(() => undefined))
-          })
-          .with({ name: 'unshift' }, () => {
-            array.unshift(undefined)
-          })
-          .with({ name: 'fill' }, ({ args: [_, ...args] }) => {
-            array.fill(undefined, ...(args as (number | undefined)[]))
-          })
-          .with({ name: 'sort' }, ({ args }) => {
-            // setProperty(formData, path, prevValue) // onValidate runs before changes are applied
-            const formDataField = getProperty(
-              formData,
-              pathSegmentsToPathString(path),
-              [],
-            ) as unknown[]
+        let next =
+          typeof segment === 'object' ? node.elements.get(segment.el) : node.children.get(key)
+        if (!next) {
+          if (!create) return
+          next = cacheNode()
+          if (typeof segment === 'object') node.elements.set(segment.el, next)
+          else node.children.set(key, next)
+        }
+        node = next
+      }
+      return { node, segments: identitySegments }
+    }
 
-            const [compareFn] = args as Parameters<Array<unknown>['sort']>
-            if (!compareFn) {
-              array.sort()
-              formDataField.sort()
-              return
+    function write(segments: Segment[], value: unknown) {
+      setStore((s) => {
+        let parent: Record<string | number, unknown> = s
+        let key: string | number = 'data'
+        for (const segment of segments) {
+          if (typeof segment !== 'object' && !isNode(parent[key]))
+            parent[key] = typeof segment === 'number' ? [] : {}
+          parent = parent[key] as Record<string | number, unknown>
+          if (typeof segment === 'object') {
+            key = Array.isArray(parent) ? parent.indexOf(segment.el) : -1
+            if (key === -1) return
+          } else key = segment
+        }
+        parent[key] = unwrapFacade(value)
+      })
+    }
+
+    /** applies a user mutation at `segments`, marks the form dirty and re-validates the affected field */
+    function mutate<R>(segments: Segment[], fn: () => R) {
+      let result!: R
+      setStore(() => {
+        result = fn()
+      })
+      setIsPristine(false)
+      void locate(segments, false)?.node.field?.validate()
+      return result
+    }
+
+    const facades = new WeakMap<object, object>()
+    /** writable view over a store node: reads pass through, writes go through the store setter */
+    function facade(target: unknown, segments: Segment[] = []): unknown {
+      if (!isNode(target)) return target
+      const cached = facades.get(target)
+      if (cached) return cached
+
+      const proxy: object = new Proxy(target, {
+        get(t, prop) {
+          if (prop === RAW) return t
+          track(formApi)
+          const value: unknown = Reflect.get(t, prop)
+          if (typeof prop === 'symbol') return value
+          if (typeof value === 'function' && Array.isArray(t) && ARRAY_MUTATORS.has(prop)) {
+            return (...args: unknown[]) =>
+              mutate(segments, () => Reflect.apply(value, t, args.map(unwrapFacade)))
+          }
+          return facade(value, [...segments, childSegment(t, normalizeKey(t, prop), value)])
+        },
+        set(t, prop, value) {
+          if (typeof prop === 'symbol') return Reflect.set(t, prop, value)
+          mutate([...segments, normalizeKey(t, prop)], () =>
+            Reflect.set(t, prop, unwrapFacade(value)),
+          )
+          return true
+        },
+        deleteProperty(t, prop) {
+          if (typeof prop === 'symbol') return Reflect.deleteProperty(t, prop)
+          mutate([...segments, normalizeKey(t, prop)], () => Reflect.deleteProperty(t, prop))
+          return true
+        },
+      })
+      facades.set(target, proxy)
+      return proxy
+    }
+
+    async function validate() {
+      return standardSchema.validate(klona(snapshot(store.data)))
+    }
+
+    const form: Form<Schema> = {
+      hooks,
+      opts: formOpts as FormOptions<Schema, FormSourceValues<Schema>>,
+      jsonSchema,
+      data: () => store.data,
+      resolve,
+      write,
+      hasField: (path) =>
+        locate(
+          path.map(
+            (segment) => (typeof segment === 'object' ? segment.key : segment) as string | number,
+          ),
+          false,
+        )?.node.field !== undefined,
+      facade,
+      accessor,
+      validate,
+      disabled,
+      isPending,
+      isPristine,
+      error: formError,
+      setError: setFormError,
+      sourceValues,
+      markDirty: () => setIsPristine(false),
+      track,
+      notify,
+    }
+
+    function accessor(segments: Segment[]) {
+      const value = () => {
+        track(formApi)
+        return resolve(segments).value
+      }
+      return new Proxy(Object.create(null) as BuildFormFieldAccessors<Data, false, true>, {
+        ownKeys() {
+          const fieldValue = value()
+          return isNode(fieldValue) ? Object.keys(fieldValue) : []
+        },
+        getOwnPropertyDescriptor() {
+          return { enumerable: true, configurable: true, writable: false }
+        },
+        has(_target, prop) {
+          const fieldValue = value()
+          return isNode(fieldValue) && Reflect.has(fieldValue, prop)
+        },
+        get(_target, prop: string | symbol) {
+          if (prop === Symbol.iterator) {
+            return () => {
+              const fieldValue = value()
+              return (
+                Array.isArray(fieldValue)
+                  ? fieldValue.map((_, index) => accessor([...segments, index]))
+                  : []
+              ).values()
             }
+          }
+          if (typeof prop === 'symbol') return
 
-            array.sort((a, b) => compareFn(a?.$field?.api.value, b?.$field?.api.value))
-            formDataField.sort(compareFn)
-          })
-          .with({ name: P.union('push') }, () => {}) // noop
-          .with(undefined, () => {
-            // array value update
-            deleteProperty(fieldCache, getFieldCachePath(pathSegmentsToPathString(path)))
-          })
-          .exhaustive()
-
-        return true
-      },
-    },
-  )
-
-  function createFormFieldProxy(path = '', fieldOpts?: FieldOpts) {
-    return new Proxy(Object.create(null) as BuildFormFieldAccessors<Data, false, true>, {
-      ownKeys() {
-        const fieldValue = getProperty(formData, path, undefined)
-        return fieldValue ? Object.keys(fieldValue) : []
-      },
-      getOwnPropertyDescriptor(_target, _key) {
-        return { enumerable: true, configurable: true, writable: false }
-      },
-      has(_target, prop: string) {
-        const fieldValue = getProperty(formData, path, undefined)
-        return Reflect.has(fieldValue ?? {}, prop)
-      },
-      get(_target, prop: string | symbol) {
-        if (prop === Symbol.iterator) {
-          const fieldValue = computed(() => getProperty(formData, path, []) as unknown[] | null)
-          if (fieldValue.value === null) return () => [].values()
-          if (!Array.isArray(fieldValue.value)) return
-
-          const iteratorPath = `${path}[Symbol.iterator]`
-
-          let fields = iteratorFieldsCache.get(iteratorPath)
-          if (!fields) {
-            const _fields = computed(
-              () =>
-                fieldValue.value?.map((_, index) => createFormFieldProxy(`${path}[${index}]`)) ??
-                [],
-            )
-            iteratorFieldsCache.set(iteratorPath, _fields)
-            fields = _fields
+          if (prop === 'at') {
+            return (index: number) => {
+              const fieldValue = value()
+              const length = Array.isArray(fieldValue) ? fieldValue.length : 0
+              return accessor([...segments, index >= 0 ? index : length + index])
+            }
           }
 
-          const iterator = computed(() => fields.value.values())
+          if (prop === 'delete') {
+            return (key: string) => {
+              const fieldValue = value()
+              if (!Array.isArray(fieldValue))
+                throw new Error("Can't delete item when field is null")
 
-          return () => iterator.value
-        }
-
-        if (typeof prop === 'symbol') return
-
-        if (prop === 'at') {
-          return (_index: number) => {
-            const fieldValue = (getProperty(formData, path) ?? []) as unknown[]
-
-            const { length } = fieldValue
-            const index = _index >= 0 ? _index : length + _index
-            return createFormFieldProxy(`${path}[${index}]`)
-          }
-        }
-
-        if (prop === 'delete') {
-          return (key: string) => {
-            const fieldValue = getProperty(formData, path, []) as unknown[] | null
-            if (!fieldValue) throw new Error("Can't delete item when field is null")
-
-            // const keyPath = key.match(/(.*)@\d+$/)?.[1]
-            const keyPath = key.match(/(.*)@[^@]+$/)?.[1]
-            if (!keyPath) throw new Error('Invalid key')
-
-            const index = keyPath.match(/\[(\d+)\]$/)?.[1]
-            if (!keyPath.startsWith(path) || index === undefined)
-              throw new Error('Key does not reference an array item')
-
-            fieldValue.splice(Number(index), 1)
-            deleteProperty(fieldCache, getFieldCachePath(keyPath))
-          }
-        }
-
-        if (prop === '$use') {
-          return <T>($opts: FormFieldAccessorOptions<T>) => {
-            let field: FormField<unknown, any>
-
-            const cachedField = getProperty(
-              fieldCache,
-              `${getFieldCachePath(path)}.$field`,
-              undefined,
-            )
-            if (cachedField) {
-              field = cachedField
-            } else {
-              debugLog(() => ['$use', path])
-
-              field = new FormField(
-                path,
-                {
-                  hooks,
-                  disabled,
-                  updateCount: formUpdateCount,
-                  data: formData,
-                  opts: formOpts,
-                  error: formError,
-                  sourceValues,
-                  isLoading,
-                  isPending,
-                  fieldCache,
-                  jsonSchema,
-                },
-                fieldOpts,
+              const node = locate(segments, false)?.node
+              const index = fieldValue.findIndex(
+                (item, i) =>
+                  (isNode(item) ? node?.elements.get(item) : node?.children.get(i))?.field?.api
+                    .key === key,
               )
+              if (index === -1) throw new Error('Key does not reference an array item')
 
-              Object.defineProperty(field.api, '$', {
-                get() {
-                  return () => createFormFieldProxy(field.api.path)
-                },
-              })
-
-              Object.assign(field.api, formOpts[extend]?.setup?.(field.api))
-              Object.assign(field.api, formOpts[extend]?.$use?.(field.api))
-
-              setProperty(fieldCache, `${getFieldCachePath(path)}.$field`, field)
+              mutate(segments, () => fieldValue.splice(index, 1))
             }
-
-            const discriminator = $opts?.discriminator
-            if (discriminator) {
-              return reactive({
-                [discriminator]: computed(
-                  () =>
-                    (field.api.value as Record<string, unknown> | null)?.[discriminator] ?? null,
-                ),
-                $field: computed(() => createFormFieldProxy(field.api.path, { discriminator })),
-              })
-            }
-
-            if (cachedField) {
-              field.api[setContext]({ path })
-            }
-
-            if ($opts?.translate) return field.translatedApi($opts.translate)
-            return field.api
           }
-        }
 
-        if (prop === '__v_raw') return
+          if (prop === '$use') {
+            return <T>($opts?: FormFieldAccessorOptions<T>) => {
+              const located = locate(segments, true)
+              if (!located) throw new Error('Field references a removed array item')
+              const field = (located.node.field ??= runWithOwner(
+                owner,
+                () => new FormField(located.segments, form),
+              )!)
 
-        const propPath = path ? `${path}.${escapePathSegment(prop)}` : escapePathSegment(prop)
-        return createFormFieldProxy(propPath)
+              const discriminator = $opts?.discriminator
+              if (discriminator) {
+                return {
+                  get [discriminator]() {
+                    return (
+                      (field.api.value as Record<string, unknown> | null)?.[discriminator] ?? null
+                    )
+                  },
+                  get $field() {
+                    return accessor(field.segments)
+                  },
+                }
+              }
+
+              if ($opts?.translate)
+                return runWithOwner(owner, () => field.translatedApi($opts.translate!))
+              return field.api
+            }
+          }
+
+          return accessor([...segments, prop])
+        },
+      })
+    }
+
+    async function validateForm() {
+      await hooks.callHook('beforeValidate')
+      const result = (await validate()) as StandardSchemaV1.Result<Schema>
+      await hooks.callHook('afterValidate', result)
+
+      if (!result.issues) {
+        setFormError(undefined)
+        return result.value
+      }
+
+      setFormError(result)
+
+      for (const issue of result.issues) {
+        if (!issue.path || form.hasField(issue.path)) continue
+        console.warn('useForm: Detected validation issue in possibly unused field:', issue)
+      }
+    }
+
+    const formApi = {
+      'hooks': hooks as FormHooks<FormHookDefinitions<Schema>>,
+      'fields': accessor([]),
+      get 'isDirty'() {
+        track(formApi)
+        return !isPristine()
       },
-    })
-  }
-
-  async function validateForm() {
-    await hooks.callHook('beforeValidate')
-    const result = (await Promise.resolve(
-      standardSchema.validate(toRaw(formData)),
-    )) as StandardSchemaV1.Result<Schema>
-    await hooks.callHook('afterValidate', result)
-
-    if (!result.issues) {
-      formError.value = undefined
-      return result.value
-    }
-
-    formError.value = result
-
-    for (const issue of result.issues) {
-      if (!issue.path) continue
-
-      const cachedField = getProperty(
-        fieldCache,
-        getFieldCachePath(pathSegmentsToPathString(issue.path)),
-      )?.$field
-      if (cachedField) continue
-
-      console.warn('useForm: Detected validation issue in possibly unused field:', issue)
-    }
-  }
-
-  const formApi = reactive({
-    hooks: markRaw(hooks as FormHooks<FormHookDefinitions<Schema>>),
-    fields: markRaw({} as BuildFormFieldAccessors<Data, false, true>),
-    isDirty,
-    isChanged: computed(() => !hasSubObject<object, object>(sourceValues.value ?? {}, formData)),
-    isLoading,
-    isDisabled: disabled,
-    data: computed(
-      () =>
-        (isPending.value ? undefined : observedFormData) as SourceValues extends undefined
+      get 'isChanged'() {
+        track(formApi)
+        return isChanged()
+      },
+      get 'isLoading'() {
+        track(formApi)
+        return isLoading()
+      },
+      get 'isDisabled'() {
+        track(formApi)
+        return disabled()
+      },
+      get 'data'() {
+        track(formApi)
+        return (isPending() ? undefined : facade(store.data)) as SourceValues extends undefined
           ? Data | undefined
-          : Data,
-    ),
-    errors: computed(() =>
-      formError.value?.issues && hasAtLeast(formError.value.issues, 1)
-        ? formError.value.issues
-        : undefined,
-    ),
-    reset,
-    submit: async () => {
-      await hooks.callHook('beforeSubmit', { data: observedFormData })
-      isValidating.value = true
+          : Data
+      },
+      get 'errors'() {
+        track(formApi)
+        const issues = formError()?.issues
+        return issues && hasAtLeast(issues, 1) ? issues : undefined
+      },
+      reset,
+      /** applies all mutations of `recipe` at once, followed by a single validation */
+      'setData'(recipe: (data: Data) => void) {
+        setStore((s) => {
+          recipe(s.data as Data)
+        })
+        setIsPristine(false)
+        void validateForm()
+      },
+      'submit': async () => {
+        await hooks.callHook('beforeSubmit', { data: facade(store.data) as Data })
+        let result = { success: false }
 
-      try {
-        const validationResult = await validateForm()
-        if (!validationResult) {
-          isValidating.value = false
+        try {
+          setIsValidating(true)
+          const values = await validateForm()
+          setIsValidating(false)
 
-          const result = { success: false }
-          await hooks.callHook('afterSubmit', result)
-          return result
+          if (values) {
+            setIsSubmitting(true)
+            result = (await formOpts.submit({ values })) ?? { success: true }
+            setIsSubmitting(false)
+
+            // don't reset because we don't want to overwrite the form data with the old sourceValues
+            // (updates to sourceValues are handled by the effect) -> only mark the form as pristine
+            if (result.success) setIsPristine(true)
+          }
+        } catch (err) {
+          console.error(err)
+          setIsValidating(false)
+          setIsSubmitting(false)
+          result = { success: false }
         }
-        isValidating.value = false
 
-        const ctx = { values: validationResult }
-        isSubmitting.value = true
-        const submitResult = (await formOpts.submit(ctx)) ?? { success: true }
-        isSubmitting.value = false
-
-        // don't reset because we don't want to overwrite the form data with the old sourceValues
-        // (updates to sourceValues are handled by the watcher)
-        // -> only set formUpdateCount to 0 to mark the form as pristine
-        if (submitResult.success) formUpdateCount.value = 0
-
-        await hooks.callHook('afterSubmit', submitResult)
+        await hooks.callHook('afterSubmit', result)
 
         if (queueReset) {
           queueReset = false
-          if (submitResult.success) reset()
+          if (result.success) reset()
         }
 
-        return submitResult
-      } catch (err) {
-        console.error(err)
-        isSubmitting.value = false
-
-        const result = { success: false }
-        await hooks.callHook('afterSubmit', result)
-
         return result
-      }
-    },
+      },
+      '~': {
+        flush,
+        subscribe: (listener) => {
+          listeners.add(listener)
+          return () => listeners.delete(listener)
+        },
+        dispose,
+      } satisfies FormInternals,
+    }
+
+    const isChanged = createMemo(
+      () => !hasSubObject<object, object>(sourceValues() ?? {}, deep(store.data)),
+    )
+    createEffect(
+      () => {
+        deep(store.data)
+        isPristine()
+        isChanged()
+        isLoading()
+        disabled()
+        formError()
+      },
+      () => {
+        notify(formApi)
+      },
+      { defer: true },
+    )
+
+    return formApi satisfies FormHandle & { fields: any; data: any }
   })
-
-  // @ts-expect-error assign fields proxy to raw prop
-  formApi.fields = createFormFieldProxy()
-
-  return formApi satisfies FormHandle & { fields: any; data: any }
 }

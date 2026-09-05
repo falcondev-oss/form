@@ -13,7 +13,5 @@ export default defineConfig({
   },
   external: ['vue', '@vue/reactivity', '@standard-schema/spec'],
   platform: 'browser',
-  noExternal: ['on-change'],
-  inlineOnly: ['on-change'],
   clean: true,
 })

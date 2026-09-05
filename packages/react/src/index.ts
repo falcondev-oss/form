@@ -1,18 +1,15 @@
 import type {
   FormField,
-  FormFieldExtend,
   FormFieldProps,
   FormOptions,
   FormSchema,
   FormSourceValues,
 } from '@falcondev-oss/form-core'
-import type { ComputedRef } from '@vue/reactivity'
 import type { FunctionComponent, NamedExoticComponent } from 'react'
 import { extend, useFormCore } from '@falcondev-oss/form-core'
-import { refEffect } from '@falcondev-oss/form-core/reactive'
-import { computed, ref, watch } from '@vue/reactivity'
-import { memo, useEffect, useMemo, useState } from 'react'
-import { tick } from './util'
+import { createMemo, createSignal, flush } from '@solidjs/signals'
+import { memo, useEffect, useMemo, useSyncExternalStore } from 'react'
+import { subscribe, tick } from './util'
 
 export type FieldModelProps<T> = {
   model: FieldModel<T>
@@ -25,103 +22,112 @@ export type FieldModel<T> = {
 
 declare module '@falcondev-oss/form-core' {
   interface FormFieldExtend<T> {
-    model: ComputedRef<FieldModel<T>>
-    [tick]: number // Ref<number> // wait for https://github.com/vuejs/core/pull/13740
+    model: FieldModel<T>
+    /** changes whenever the field's state changed, see `FormFieldMemo` */
+    [tick]: number
+    [subscribe]: (listener: () => void) => () => void
   }
+}
+
+export type FormOptionsReact<
+  Schema extends FormSchema,
+  SourceValues extends FormSourceValues<Schema> = FormSourceValues<Schema>,
+> = Omit<FormOptions<Schema, SourceValues>, 'sourceValues' | 'disabled'> & {
+  sourceValues: SourceValues
+  disabled?: boolean
 }
 
 export function useForm<
   const Schema extends FormSchema,
   SourceValues extends FormSourceValues<Schema> = FormSourceValues<Schema>,
->(opts: FormOptions<Schema, SourceValues>): ReturnType<typeof useFormCore<Schema, SourceValues>> {
-  const setTick = useState(0)[1]
+>(
+  opts: FormOptionsReact<Schema, SourceValues>,
+): ReturnType<typeof useFormCore<Schema, SourceValues>> {
+  const { form, setSourceValues, setDisabled, submitRef, onChange, getVersion } = useMemo(() => {
+    const [sourceValues, setSourceValues] = createSignal(
+      opts.sourceValues as Exclude<SourceValues, Function>,
+    )
+    const [disabled, setDisabled] = createSignal(opts.disabled ?? false)
+    const submitRef = { current: opts.submit }
 
-  const { form, sourceValuesRef, submitFnRef } = useMemo(() => {
-    const sourceValuesRef = refEffect(opts.sourceValues)
-    const submitFnRef = ref(opts.submit)
+    let version = 0
+    const versions = new WeakMap<object, number>()
+    const listeners = new Set<() => void>()
+    const onChange = (listener: () => void) => {
+      listeners.add(listener)
+      return () => void listeners.delete(listener)
+    }
 
-    const tickRef = ref(0)
     const form = useFormCore({
       ...opts,
-      submit: async (...args) => submitFnRef.value(...args),
-      sourceValues: () => sourceValuesRef.value,
+      sourceValues,
+      disabled,
+      submit: async (...args) => submitRef.current(...args),
       [extend]: {
-        setup: () => {
-          return {
-            [tick]: tickRef as unknown as number, // wait for https://github.com/vuejs/core/pull/13740
-          } satisfies Omit<FormFieldExtend<any>, 'model'> as FormFieldExtend<any>
-        },
-        $use: (field) => {
-          watch(
-            () => [field.errors, field.value],
-            () => {
-              tickRef.value = Date.now()
-              setTick(Date.now())
+        $use: (field, scope) => {
+          const model = createMemo(() => ({
+            value: field.value,
+            onUpdate: (value: typeof field.value) => {
+              field.handleChange(value)
+              flush()
             },
-          )
+          }))
 
           return {
-            // this needs to be a computed to ensure reactivity, because useForm is memoized
-            model: computed(() => ({
-              value: field.value,
-              onUpdate: field.handleChange,
-            })),
-          } satisfies Omit<FormFieldExtend<any>, typeof tick> as FormFieldExtend<any>
+            get model() {
+              return model()
+            },
+            get [tick]() {
+              return versions.get(scope) ?? 0
+            },
+            [subscribe]: onChange,
+          }
         },
       },
     })
 
-    return {
-      form,
-      sourceValuesRef,
-      submitFnRef,
-    }
+    form['~'].subscribe((scope) => {
+      version++
+      versions.set(scope, (versions.get(scope) ?? 0) + 1)
+      for (const listener of listeners) listener()
+    })
+
+    return { form, setSourceValues, setDisabled, submitRef, onChange, getVersion: () => version }
   }, [])
 
+  useSyncExternalStore(onChange, getVersion)
+
   useEffect(() => {
-    submitFnRef.value = opts.submit
+    submitRef.current = opts.submit
   }, [opts.submit])
 
   useEffect(() => {
-    if (typeof opts.sourceValues === 'function') return
-    sourceValuesRef.value = opts.sourceValues
+    setSourceValues(() => opts.sourceValues as Exclude<SourceValues, Function>)
   }, [opts.sourceValues])
 
   useEffect(() => {
-    watch(
-      () => [form.errors, form.isLoading, form.isChanged, form.isDirty],
-      () => {
-        setTick(Date.now())
-      },
-    )
-  }, [])
+    setDisabled(opts.disabled ?? false)
+  }, [opts.disabled])
 
   return form
 }
 
 export function useField<T>(field: FormField<T>) {
-  const setTick = useState(0)[1]
-  useEffect(() => {
-    const watcher = watch(field, () => {
-      setTick(Date.now())
-    })
-    return watcher.stop
-  }, [field])
-
+  useSyncExternalStore(field[subscribe], () => field[tick])
   return field
 }
 
 export function FormFieldMemo<T, P extends object>(
   component: FunctionComponent<P & FormFieldProps<T>>,
 ): NamedExoticComponent<P & FormFieldProps<T>> {
-  const prevTick = ref<unknown>()
+  let prevTick: number | undefined
 
   return memo(component, (prev, next) => {
-    if (prevTick.value === next.field[tick]) {
+    if (prevTick === next.field[tick]) {
       return true // skip rerender
     }
 
-    prevTick.value = prev.field[tick]
+    prevTick = prev.field[tick]
     return false // rerender
   })
 }
