@@ -1,5 +1,4 @@
-import { ref, watch } from '@vue/reactivity'
-import { until } from '@vueuse/core'
+import { createSignal } from '@solidjs/signals'
 import { type } from 'arktype'
 import { describe, expect, expectTypeOf, test, vi } from 'vitest'
 import z from 'zod'
@@ -23,6 +22,7 @@ describe('form', () => {
       expect(form.isChanged).toBe(false)
 
       form.fields.name.$use().handleChange('Jane Doe')
+      form['~'].flush()
 
       expect(form.data.name).toBe('Jane Doe')
       expect(form.isChanged).toBe(true)
@@ -45,13 +45,14 @@ describe('form', () => {
       expect(form.isChanged).toBe(false)
 
       form.fields.name.$use().handleChange('Jane Doe')
+      form['~'].flush()
 
       expect(form.data.name).toBe('Jane Doe')
       expect(form.isChanged).toBe(true)
     })
   })
 
-  test('data', () => {
+  test('writes apply on flush', async () => {
     const form = useFormCore({
       schema: z.object({
         name: z.string(),
@@ -62,26 +63,25 @@ describe('form', () => {
       async submit() {},
     })
 
-    expect(form.data.name).toBe('John Doe')
-
     const spy = vi.fn()
-
-    watch(
-      () => form.data.name,
-      (value) => void spy(value),
-    )
+    form['~'].subscribe(spy)
 
     form.fields.name.$use().handleChange('Isaac Newton')
-    expect(spy).toHaveBeenCalledWith('Isaac Newton')
+    expect(form.data.name).toBe('John Doe')
+    expect(spy).not.toHaveBeenCalled()
+
+    await Promise.resolve()
+    expect(form.data.name).toBe('Isaac Newton')
+    expect(spy).toHaveBeenCalledWith(form)
   })
 
   describe('sourceValues', () => {
     test('forbid updates when dirty', () => {
-      const sourceValues = ref({
+      const [sourceValues, setSourceValues] = createSignal({
         name: 'John Doe',
       })
       const form = useFormCore({
-        sourceValues: () => sourceValues.value,
+        sourceValues,
         schema: z.object({
           name: z.string(),
         }),
@@ -89,36 +89,93 @@ describe('form', () => {
       })
 
       form.data.name = 'Jane Doe'
+      form['~'].flush()
       expect(form.data.name).toBe('Jane Doe')
 
-      sourceValues.value = {
+      setSourceValues({
         name: 'Alice Johnson',
-      }
+      })
+      form['~'].flush()
       expect(form.data.name).toBe('Jane Doe')
     })
 
     test('allow updates during submit', async () => {
-      const sourceValues = ref({
+      const [sourceValues, setSourceValues] = createSignal({
         name: 'John Doe',
       })
       const form = useFormCore({
-        sourceValues: () => sourceValues.value,
+        sourceValues,
         schema: z.object({
           name: z.string(),
         }),
         async submit() {
-          sourceValues.value = {
+          setSourceValues({
             name: 'Jane Smith',
-          }
+          })
         },
       })
 
       // make form dirty
       form.data.name = 'Jane Doe'
+      form['~'].flush()
       expect(form.data.name).toBe('Jane Doe')
 
       await form.submit()
+      form['~'].flush()
       expect(form.data.name).toBe('Jane Smith')
+    })
+
+    test('key resolver keeps fields across a reordered refresh', () => {
+      const [sourceValues, setSourceValues] = createSignal({
+        items: [
+          { id: 1, name: 'a' },
+          { id: 2, name: 'b' },
+        ],
+      })
+      const form = useFormCore({
+        sourceValues,
+        key: 'id',
+        schema: z.object({
+          items: z.array(z.object({ id: z.number(), name: z.string() })),
+        }),
+        async submit() {},
+      })
+
+      const second = form.fields.items.at(1).$use()
+
+      setSourceValues({
+        items: [
+          { id: 2, name: 'b2' },
+          { id: 1, name: 'a2' },
+        ],
+      })
+      form['~'].flush()
+
+      expect(form.fields.items.at(0).$use()).toBe(second)
+      expect(second.value).toEqual({ id: 2, name: 'b2' })
+    })
+
+    test('reset keeps fields stable', () => {
+      const [sourceValues, setSourceValues] = createSignal({
+        items: [{ name: 'a' }, { name: 'b' }],
+      })
+      const form = useFormCore({
+        sourceValues,
+        schema: z.object({
+          items: z.array(z.object({ name: z.string() })),
+        }),
+        async submit() {},
+      })
+
+      const first = form.fields.items.at(0).$use()
+      const firstName = form.fields.items.at(0).name.$use()
+
+      setSourceValues({ items: [{ name: 'x' }, { name: 'y' }] })
+      form['~'].flush()
+
+      expect(form.fields.items.at(0).$use()).toBe(first)
+      expect(form.fields.items.at(0).name.$use()).toBe(firstName)
+      expect(firstName.value).toBe('x')
     })
   })
 
@@ -134,6 +191,7 @@ describe('form', () => {
     })
 
     form.data.name = 'Jane Doe'
+    form['~'].flush()
     expect(form.isDirty).toBe(true)
 
     await form.submit()
@@ -141,7 +199,74 @@ describe('form', () => {
     expect(form.data.name).toBe('Jane Doe')
   })
 
+  test('reset', async () => {
+    const form = useFormCore({
+      schema: z.object({
+        name: z.string().min(1),
+      }),
+      sourceValues: {
+        name: 'John',
+      },
+      async submit() {},
+    })
+    const nameField = form.fields.name.$use()
+
+    nameField.handleChange('')
+    await sleep(0)
+    expect(nameField.errors).toBeDefined()
+    expect(form.isDirty).toBe(true)
+
+    form.reset()
+    form['~'].flush()
+    expect(form.data.name).toBe('John')
+    expect(form.isDirty).toBe(false)
+    expect(nameField.isDirty).toBe(false)
+    expect(nameField.errors).toBeUndefined()
+  })
+
+  test('setData', async () => {
+    const beforeValidate = vi.fn()
+    const form = useFormCore({
+      schema: z.object({
+        name: z.string(),
+        tags: z.array(z.string()),
+      }),
+      sourceValues: {
+        name: 'John',
+        tags: ['a'],
+      },
+      hooks: { beforeValidate },
+      async submit() {},
+    })
+    const nameField = form.fields.name.$use()
+
+    form.setData((data) => {
+      data.name = null
+      data.tags!.push('b')
+    })
+    form['~'].flush()
+
+    expect(form.data).toEqual({ name: null, tags: ['a', 'b'] })
+    expect(form.isDirty).toBe(true)
+    await sleep(0)
+    expect(nameField.errors).toEqual(['Invalid input: expected string, received null'])
+    expect(beforeValidate).toHaveBeenCalledOnce()
+
+    form.setData((data) => {
+      data.name = 'Jane'
+    })
+    await sleep(0)
+    expect(nameField.errors).toBeUndefined()
+  })
+
   test('arktype delete extra keys', async () => {
+    const sourceValues = {
+      name: 'John',
+      nested: {
+        age: 42,
+      },
+      extra: 'This will be deleted',
+    }
     const form = useFormCore({
       schema: type({
         'name': 'string',
@@ -150,13 +275,7 @@ describe('form', () => {
         },
         '+': 'delete',
       }),
-      sourceValues: {
-        name: 'John',
-        nested: {
-          age: 42,
-        },
-        extra: 'This will be deleted',
-      },
+      sourceValues,
       async submit({ values }) {
         expect(values).toEqual({
           name: 'John',
@@ -168,6 +287,8 @@ describe('form', () => {
     })
 
     await expect(form.submit()).resolves.toEqual({ success: true })
+    expect(sourceValues.extra).toBe('This will be deleted')
+    expect(form.data).toEqual(sourceValues)
   })
 
   test('arktype mutates validation object', async () => {
@@ -192,7 +313,7 @@ describe('form', () => {
   })
 
   test('form disabled state', async () => {
-    const disabled = ref(true)
+    const [disabled, setDisabled] = createSignal(true)
 
     const form = useFormCore({
       schema: z.object({
@@ -210,7 +331,8 @@ describe('form', () => {
     expect(form.isDisabled).toBe(true)
     expect(field.disabled).toBe(true)
 
-    disabled.value = false
+    setDisabled(false)
+    form['~'].flush()
     expect(form.isLoading).toBe(false)
     expect(form.isDisabled).toBe(false)
     expect(field.disabled).toBe(false)
@@ -245,18 +367,19 @@ describe('field', () => {
     expect(ageField.errors).toBeUndefined()
 
     await form.submit()
+    form['~'].flush()
     expect(nestedField.errors).toEqual(['Invalid input: expected string, received null'])
     expect(ageField.errors).toEqual(['Invalid input: expected number, received null'])
 
     // error resets
     ageField.handleChange(42)
-    await Promise.resolve()
+    await sleep(0)
     expect(nestedField.errors).toEqual(['Invalid input: expected string, received null'])
     expect(ageField.errors).toBeUndefined()
     expect(form.errors?.length).toBeDefined()
 
     form.data.array![0]!.name = 'John'
-    await Promise.resolve()
+    await sleep(0)
     expect(nestedField.errors).toBeUndefined()
     expect(ageField.errors).toBeUndefined()
     expect(form.errors).toBeUndefined()
@@ -277,12 +400,12 @@ describe('field', () => {
 
     field.handleChange('' as never)
     field.handleBlur()
-    await Promise.resolve()
+    await sleep(0)
     expect(field.errors).toBeDefined()
 
     field.handleChange(0)
     field.handleBlur()
-    await Promise.resolve()
+    await sleep(0)
     expect(field.errors).toBeUndefined()
   })
 
@@ -310,6 +433,7 @@ describe('field', () => {
 
     let now = new Date()
     fieldT.handleChange(now)
+    form['~'].flush()
 
     expect(fieldT.value).toEqual(now)
     expect(field.value).toBe(now.toISOString())
@@ -317,6 +441,7 @@ describe('field', () => {
 
     now = new Date(+now + 1)
     field.handleChange(now.toISOString())
+    form['~'].flush()
 
     expect(fieldT.value).toEqual(now)
     expect(field.value).toBe(now.toISOString())
@@ -330,7 +455,7 @@ describe('field', () => {
         value: 'Hello',
       },
     }
-    const data = ref<typeof loadedData>()
+    const [data, setData] = createSignal<typeof loadedData>()
 
     const form = useFormCore({
       schema: z.object({
@@ -345,9 +470,7 @@ describe('field', () => {
           }),
         ]),
       }),
-      sourceValues() {
-        return data.value
-      },
+      sourceValues: data,
       async submit() {},
     })
 
@@ -368,7 +491,8 @@ describe('field', () => {
         | null
       >()
     }
-    data.value = loadedData
+    setData(loadedData)
+    form['~'].flush()
 
     expect('type' in unionField.$field).toBe(true)
     expect('notFound' in unionField.$field).toBe(false)
@@ -382,6 +506,7 @@ describe('field', () => {
     }
 
     if (form.data) form.data.union = { type: 'B', value: 42 }
+    form['~'].flush()
     expect(unionField.$field.$use().value).toEqual({ type: 'B', value: 42 })
     if (unionField.type === 'B') {
       expectTypeOf(unionField.$field.$use().value).toEqualTypeOf<{
@@ -392,7 +517,7 @@ describe('field', () => {
   })
 
   test('sourceValues is undefined', async () => {
-    const isLoading = ref(true)
+    const [isLoading, setIsLoading] = createSignal(true)
 
     const form = useFormCore({
       schema: z.object({
@@ -401,14 +526,14 @@ describe('field', () => {
         }),
       }),
       sourceValues() {
-        if (isLoading.value) return
+        if (isLoading()) return
 
         return {
           person: { name: 'John Doe' },
         }
       },
       async submit() {
-        await sleep(1000)
+        await sleep(50)
         return { success: true }
       },
     })
@@ -420,9 +545,11 @@ describe('field', () => {
     expect(nameField.value).toBeNull()
 
     nameField.handleChange('Input is ignored')
+    form['~'].flush()
     expect(nameField.value).toBeNull()
 
-    isLoading.value = false
+    setIsLoading(false)
+    form['~'].flush()
     expect(nameField.isPending).toBe(false)
     expect(form.isLoading).toBe(false)
 
@@ -431,11 +558,13 @@ describe('field', () => {
 
     const submit = form.submit()
 
-    await until(() => form.isLoading).toBe(true)
+    await sleep(10)
+    form['~'].flush()
     expect(form.isLoading).toBe(true)
     expect(nameField.isPending).toBe(false) // pending is only for loading source values
 
     await submit
+    form['~'].flush()
 
     expect(form.isLoading).toBe(false)
     expect(nameField.isPending).toBe(false)
@@ -460,17 +589,19 @@ describe('field', () => {
       expect(stringField.value).toBeNull()
 
       stringField.handleChange('Test')
+      form['~'].flush()
 
       expect(stringField.value).toBe('Test')
       expect(form.data['foo.bar']).toBe('Test')
       expect(stringField.path).toBe(String.raw`foo\.bar`)
 
-      // array (has special cache handling)
+      // primitive array elements are positional
       const arrayField = form.fields['foo.bar.array'].at(0).$use()
       expect(arrayField.value).toBe('one')
       expect(form.data['foo.bar.array']?.[0]).toEqual('one')
 
       form.data['foo.bar.array']?.unshift('zero')
+      form['~'].flush()
 
       expect(form.data['foo.bar.array']?.[0]).toEqual('zero')
       expect(arrayField.value).toBe('zero')
@@ -492,6 +623,7 @@ describe('field', () => {
       expect(form.data.array?.[0]).toEqual('one')
 
       form.data.array?.unshift('zero')
+      form['~'].flush()
 
       expect(form.data.array?.[0]).toEqual('zero')
       expect(arrayField.value).toBe('zero')
@@ -532,22 +664,21 @@ describe('field', () => {
       async submit() {},
     })
 
-    const consoleWarnSpy = vi.spyOn(console, 'warn')
-
-    // @ts-expect-error Prevent assignment to readonly property
-    form.fields.$use().value = {}
-    expect(consoleWarnSpy).toHaveBeenLastCalledWith(
-      '[Vue warn] Set operation on key "value" failed: target is readonly.',
-      expect.anything(),
-    )
+    expect(() => {
+      // @ts-expect-error Prevent assignment to readonly property
+      form.fields.$use().value = {}
+    }).toThrow(TypeError)
 
     form.fields.$use().value.a = 'new value'
+    form['~'].flush()
     expect(form.data.a).toBe('new value')
     form.fields.$use().value.obj!.b = 456
+    form['~'].flush()
     expect(form.data.obj?.b).toBe(456)
 
     // pushing to array is allowed
     form.fields.array.$use().value?.push('three')
+    form['~'].flush()
     expect(form.data.array).toEqual(['one', 'two', 'three'])
   })
 })
@@ -582,6 +713,7 @@ describe('hooks', () => {
 
     // @ts-expect-error test validation
     form.data.name = 2
+    form['~'].flush()
 
     result = await form.submit()
 
@@ -589,35 +721,6 @@ describe('hooks', () => {
     expect(beforeSubmitSpy).toHaveBeenNthCalledWith(2, { data: { name: 2 } })
     expect(afterSubmitSpy).toHaveBeenNthCalledWith(2, { success: false })
   })
-
-  // test('beforeReset, afterReset', () => {
-  //   const beforeResetSpy = vi.fn()
-  //   const afterResetSpy = vi.fn()
-
-  //   const form = useFormCore({
-  //     schema: z.object({
-  //       name: z.string(),
-  //     }),
-  //     sourceValues: {
-  //       name: 'John',
-  //     },
-  //     hooks: {
-  //       beforeReset: beforeResetSpy,
-  //       afterReset: afterResetSpy,
-  //     },
-  //     async submit() {},
-  //   })
-
-  //   form.fields.name.$use().handleChange('Jane')
-  //   expect(form.data.name).toBe('Jane')
-
-  //   form.reset()
-
-  //   expect(form.data.name).toBe('John')
-  //   expect(beforeResetSpy).toHaveBeenCalled()
-  //   expect(afterResetSpy).toHaveBeenCalled()
-  //   expect(beforeResetSpy).toHaveBeenCalledBefore(afterResetSpy)
-  // })
 
   test('beforeValidate, afterValidate', async () => {
     const beforeValidateSpy = vi.fn()
@@ -672,33 +775,6 @@ describe('hooks', () => {
     expect(beforeFieldChangeSpy).toHaveBeenCalledBefore(afterFieldChangeSpy)
   })
 
-  // test('beforeFieldReset, afterFieldReset', () => {
-  //   const beforeFieldResetSpy = vi.fn()
-  //   const afterFieldResetSpy = vi.fn()
-
-  //   const form = useFormCore({
-  //     schema: z.object({
-  //       name: z.string(),
-  //     }),
-  //     sourceValues: {
-  //       name: 'John',
-  //     },
-  //     hooks: {
-  //       beforeFieldReset: beforeFieldResetSpy,
-  //       afterFieldReset: afterFieldResetSpy,
-  //     },
-  //     async submit() {},
-  //   })
-
-  //   const field = form.fields.name.$use()
-  //   field.handleChange('Jane')
-  //   field.reset()
-
-  //   expect(beforeFieldResetSpy).toHaveBeenCalled()
-  //   expect(afterFieldResetSpy).toHaveBeenCalled()
-  //   expect(beforeFieldResetSpy).toHaveBeenCalledBefore(afterFieldResetSpy)
-  // })
-
   test('async hook order', async () => {
     const hookOrder: string[] = []
 
@@ -729,8 +805,31 @@ describe('hooks', () => {
 
     expect(hookOrder).toEqual(['beforeSubmit', 'submit', 'afterSubmit'])
   })
+})
 
-  test('arrays', async () => {
+describe('arrays', () => {
+  function setup() {
+    return useFormCore({
+      schema: z.object({
+        items: z.array(
+          z.object({
+            a: z.string().min(1),
+            b: z.number(),
+          }),
+        ),
+      }),
+      sourceValues: {
+        items: [
+          { a: '1', b: 1 },
+          { a: '2', b: 2 },
+          { a: '3', b: 3 },
+        ],
+      },
+      async submit() {},
+    })
+  }
+
+  test('replacing the array creates new element fields', async () => {
     const form = useFormCore({
       schema: z.object({
         items: z.array(
@@ -758,25 +857,155 @@ describe('hooks', () => {
       { a: '2', b: 2 },
       { a: '3', b: 3 },
     ])
+    form['~'].flush()
     expect(a2.value).toBe('3')
 
-    // after handleChange, fieldCache is cleared
+    // the new element is a new datum, so it gets a fresh field
     expect(form.fields.items.at(2)?.a.$use().key).not.toBe(a2PrevKey)
+    expect(form.fields.items.$use()).toBe(items)
 
     expect(form.data.items).toEqual([
       { a: '1', b: 1 },
       { a: '2', b: 2 },
       { a: '3', b: 3 },
     ])
+  })
+
+  test('delete by key', () => {
+    const form = setup()
 
     expect(() => form.fields.items.delete(form.fields.items.at(2).a.$use().key)).toThrow(
       'Key does not reference an array item',
     )
 
-    form.fields.items.delete(form.fields.items.at(2).$use().key)
+    const second = form.fields.items.at(1).$use()
+    form.data.items!.reverse()
+    form['~'].flush()
+
+    form.fields.items.delete(second.key)
+    form['~'].flush()
     expect(form.data.items).toEqual([
+      { a: '3', b: 3 },
       { a: '1', b: 1 },
-      { a: '2', b: 2 },
     ])
+  })
+
+  test('fields follow their element across reorders', async () => {
+    const form = setup()
+
+    const first = form.fields.items.at(0).$use()
+    const firstA = form.fields.items.at(0).a.$use()
+    const third = form.fields.items.at(2).$use()
+
+    firstA.handleChange('')
+    await sleep(0)
+    expect(firstA.isDirty).toBe(true)
+    expect(firstA.errors).toEqual(['Too small: expected string to have >=1 characters'])
+
+    form.data.items!.reverse()
+    form['~'].flush()
+
+    expect(form.fields.items.at(2).$use()).toBe(first)
+    expect(form.fields.items.at(2).a.$use()).toBe(firstA)
+    expect(form.fields.items.at(0).$use()).toBe(third)
+    expect(firstA.path).toBe('items[2].a')
+    expect(firstA.value).toBe('')
+    expect(firstA.isDirty).toBe(true)
+    expect(firstA.errors).toEqual(['Too small: expected string to have >=1 characters'])
+    expect(first.value).toEqual({ a: '', b: 1 })
+
+    form.data.items!.sort((x, y) => x!.b! - y!.b!)
+    form['~'].flush()
+    expect(form.fields.items.at(0).$use()).toBe(first)
+    expect(firstA.path).toBe('items[0].a')
+
+    form.data.items!.splice(1, 0, { a: 'new', b: 0 })
+    form['~'].flush()
+    expect(form.fields.items.at(0).$use()).toBe(first)
+    expect(form.fields.items.at(3).$use()).toBe(third)
+    expect(form.fields.items.at(1).$use()).not.toBe(first)
+
+    form.data.items!.unshift({ a: 'first', b: -1 })
+    form.data.items!.splice(2, 1)
+    form['~'].flush()
+    expect(form.data.items).toEqual([
+      { a: 'first', b: -1 },
+      { a: '', b: 1 },
+      { a: '2', b: 2 },
+      { a: '3', b: 3 },
+    ])
+    expect(form.fields.items.at(1).$use()).toBe(first)
+    expect(form.fields.items.at(3).$use()).toBe(third)
+    expect(third.path).toBe('items[3]')
+    expect([...form.fields.items].map((item) => item.$use())).toEqual([
+      form.fields.items.at(0).$use(),
+      first,
+      form.fields.items.at(2).$use(),
+      third,
+    ])
+  })
+
+  test('data writes after a reorder validate the moved element', async () => {
+    const form = setup()
+    const thirdA = form.fields.items.at(2).a.$use()
+    // cache a facade of the element while it sits at index 2
+    expect(form.data.items![2]!.a).toBe('3')
+
+    form.data.items!.reverse()
+    form['~'].flush()
+    form.data.items![0]!.a = ''
+    await sleep(0)
+
+    expect(thirdA.value).toBe('')
+    expect(thirdA.errors).toEqual(['Too small: expected string to have >=1 characters'])
+  })
+
+  test('removed element field detaches', () => {
+    const form = setup()
+    const second = form.fields.items.at(1).$use()
+
+    form.data.items!.splice(1, 1)
+    form['~'].flush()
+
+    expect(second.value).toBeNull()
+    expect(form.fields.items.at(1).$use()).not.toBe(second)
+  })
+
+  test('primitive elements stay positional', () => {
+    const form = useFormCore({
+      schema: z.object({
+        tags: z.array(z.string()),
+      }),
+      sourceValues: {
+        tags: ['a', 'b'],
+      },
+      async submit() {},
+    })
+
+    const first = form.fields.tags.at(0).$use()
+    form.data.tags!.reverse()
+    form['~'].flush()
+
+    expect(form.fields.tags.at(0).$use()).toBe(first)
+    expect(first.value).toBe('b')
+  })
+
+  test('object properties stay bound by name', () => {
+    const form = useFormCore({
+      schema: z.object({
+        person: z.object({ name: z.string() }),
+      }),
+      sourceValues: {
+        person: { name: 'John' },
+      },
+      async submit() {},
+    })
+
+    const name = form.fields.person.name.$use()
+    form.data.person = { name: 'Jane' }
+    form['~'].flush()
+
+    expect(form.fields.person.name.$use()).toBe(name)
+    expect(name.value).toBe('Jane')
   })
 })

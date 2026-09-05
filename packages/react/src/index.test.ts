@@ -1,5 +1,4 @@
 import { act, renderHook } from '@testing-library/react'
-import { isReactive, watch } from '@vue/reactivity'
 import { useState } from 'react'
 import { describe, expect, test, vi } from 'vitest'
 import z from 'zod'
@@ -24,9 +23,9 @@ describe('react', () => {
         schema: z.object({
           name: z.string(),
         }),
-        sourceValues: () => ({
+        sourceValues: {
           name: 'John Doe',
-        }),
+        },
         async submit() {},
       })
     })
@@ -56,9 +55,9 @@ describe('react', () => {
         schema: z.object({
           name: z.string(),
         }),
-        sourceValues: () => ({
+        sourceValues: {
           name: 'John Doe',
-        }),
+        },
         async submit() {},
       }),
     )
@@ -72,7 +71,7 @@ describe('react', () => {
     })
     expect(renderCount).toEqual(1)
 
-    act(() => {
+    await act(async () => {
       nameField.handleChange('Jane Doe')
     })
 
@@ -136,31 +135,27 @@ describe('react', () => {
     expect(form.current.data.password).toEqual('123456')
   })
 
-  test('reactivity', () => {
-    const {
-      result: { current: form },
-    } = renderHook(() =>
-      useForm({
+  test('data writes rerender after flush', async () => {
+    let renderCount = 0
+    const { result: form } = renderHook(() => {
+      renderCount++
+      return useForm({
         schema: z.object({
           name: z.string(),
         }),
-        sourceValues: () => ({
+        sourceValues: {
           name: 'John Doe',
-        }),
+        },
         async submit() {},
-      }),
-    )
+      })
+    })
 
-    expect(isReactive(form)).toBe(true)
+    await act(async () => {
+      form.current.data.name = 'Jane Doe'
+    })
 
-    const dataWatcher = vi.fn()
-    watch(() => form.data.name, dataWatcher)
-    const isChangedWatcher = vi.fn()
-    watch(() => form.isChanged, isChangedWatcher)
-
-    form.data.name = 'Jane Doe'
-
-    expect(dataWatcher).toHaveBeenCalledOnce()
-    expect(isChangedWatcher).toHaveBeenCalledOnce()
+    expect(renderCount).toEqual(2)
+    expect(form.current.data.name).toEqual('Jane Doe')
+    expect(form.current.isChanged).toBe(true)
   })
 })

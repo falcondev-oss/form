@@ -2,7 +2,7 @@
   "name": "@falcondev-oss/form-vue",
   "type": "module",
   "version": "0.24.2",
-  "description": "Type-safe, framework agnostic form state library based on @vue/reactivity.",
+  "description": "Type-safe, framework agnostic form state library based on @solidjs/signals.",
   "license": "Apache-2.0",
   "repository": "github:falcondev-oss/form",
   "bugs": {
@@ -52,7 +52,7 @@
   },
   "dependencies": {
     "@falcondev-oss/form-core": "workspace:*",
-    "hookable": "^6.1.1"
+    "@solidjs/signals": "^2.0.0-rc.6"
   },
   "devDependencies": {
     "typescript": "^7.0.2",
