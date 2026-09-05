@@ -4,13 +4,22 @@ import type {
   FormSchema,
   FormSourceValues,
 } from '@falcondev-oss/form-core'
-import type { MaybeRefOrGetter, WritableComputedRef } from 'vue'
+import type { MaybeRefOrGetter } from 'vue'
 import { extend, useFormCore } from '@falcondev-oss/form-core'
-import { computed, reactive, toValue } from 'vue'
+import {
+  computed,
+  getCurrentScope,
+  nextTick,
+  onScopeDispose,
+  reactive,
+  shallowRef,
+  toValue,
+  watch,
+} from 'vue'
 
 declare module '@falcondev-oss/form-core' {
   interface FormFieldExtend<T> {
-    model: WritableComputedRef<T>
+    model: T
   }
 }
 
@@ -54,24 +63,68 @@ export function useForm<
   const Schema extends FormSchema,
   SourceValues extends FormSourceValues<Schema> = FormSourceValues<Schema>,
 >(
-  opts: FormOptions<Schema, SourceValues>,
-): ReturnType<typeof useFormCore<Schema, SourceValues>> & { _v: 'new' } {
-  const form = useFormCore({
-    ...opts,
-    [extend]: {
-      $use: (field) => {
-        const model = computed({
-          get: () => field.value,
-          set: (v) => field.handleChange(v),
-        })
-
-        return { model }
+  opts: Omit<FormOptions<Schema, SourceValues>, 'sourceValues' | 'disabled'> & {
+    sourceValues: MaybeRefOrGetter<SourceValues>
+    disabled?: MaybeRefOrGetter<boolean>
+  },
+): ReturnType<typeof useFormCore<Schema, SourceValues>> {
+  const version = shallowRef(0)
+  const wrappers = new WeakMap<object, object>()
+  function bridge<T extends object>(value: T): T {
+    const cached = wrappers.get(value)
+    if (cached) return cached as T
+    const wrapped = new Proxy(value, {
+      get(target, key, receiver) {
+        void version.value
+        return Reflect.get(target, key, receiver)
       },
+    })
+    wrappers.set(value, wrapped)
+    return wrapped
+  }
+  const getOptions = () => ({
+    ...opts,
+    sourceValues: toValue(opts.sourceValues),
+    disabled: opts.disabled === undefined ? false : toValue(opts.disabled),
+  })
+  const form = useFormCore({
+    ...getOptions(),
+    [extend]: {
+      wrap: bridge,
+      $use: (field) => ({
+        get model() {
+          void version.value
+          return field.value
+        },
+        set model(value) {
+          field.handleChange(value)
+        },
+      }),
     },
   })
-
-  // TODO: remove _v type flag
-  return Object.assign(form, { _v: 'new' } as const)
+  const unsubscribe = form['~'].subscribe(() => {
+    const focused = typeof document === 'undefined' ? null : document.activeElement
+    version.value++
+    // Vue's keyed DOM moves can blur an input even though its node survives.
+    void nextTick(() => {
+      if (
+        focused &&
+        focused instanceof HTMLElement &&
+        focused.isConnected &&
+        document.activeElement === document.body
+      ) {
+        focused.focus({ preventScroll: true })
+      }
+    })
+  })
+  const stop = watch(getOptions, (next) => form['~'].updateOptions(next), { deep: true })
+  if (getCurrentScope())
+    onScopeDispose(() => {
+      stop()
+      unsubscribe()
+      form['~'].dispose()
+    })
+  return form
 }
 
 export type {
@@ -82,4 +135,3 @@ export type {
   FormHandle,
   NullableDeep,
 } from '@falcondev-oss/form-core'
-export { refEffect } from '@falcondev-oss/form-core/reactive'

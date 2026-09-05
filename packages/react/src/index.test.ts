@@ -1,10 +1,8 @@
-import { act, renderHook } from '@testing-library/react'
-import { isReactive, watch } from '@vue/reactivity'
-import { useState } from 'react'
+import { act, render, renderHook } from '@testing-library/react'
+import { createElement, useState } from 'react'
 import { describe, expect, test, vi } from 'vitest'
 import z from 'zod'
-import { useField, useForm } from '.'
-import { tick } from './util'
+import { FormFieldMemo, useField, useForm } from '.'
 
 type Deferred = { promise: Promise<void>; resolve: () => void }
 function deferred(): Deferred {
@@ -34,17 +32,13 @@ describe('react', () => {
     expect(form.current.fields.name.$use().model.value).toEqual('John Doe')
 
     expect(renderCount).toEqual(1)
-    const previousTick = form.current.fields.name.$use()[tick]
 
-    act(() => {
+    await act(async () => {
       form.current.fields.name.$use().model.onUpdate('Jane Doe')
     })
 
     // check if react component update occurred
-    const currentTick = form.current.fields.name.$use()[tick]
     expect(renderCount).toEqual(2)
-
-    expect(previousTick).toBeLessThan(currentTick)
 
     expect(form.current.fields.name.$use().model.value).toEqual('Jane Doe')
     expect(form.current.data?.name).toEqual('Jane Doe')
@@ -72,7 +66,7 @@ describe('react', () => {
     })
     expect(renderCount).toEqual(1)
 
-    act(() => {
+    await act(async () => {
       nameField.handleChange('Jane Doe')
     })
 
@@ -107,13 +101,13 @@ describe('react', () => {
       })
     })
 
-    act(() => {
+    await act(async () => {
       form.current.fields.password.$use().model.onUpdate('123456')
     })
     expect(form.current.data.password).toEqual('123456')
 
     let submitPromise!: Promise<unknown>
-    act(() => {
+    await act(async () => {
       submitPromise = form.current.submit()
     })
 
@@ -122,7 +116,7 @@ describe('react', () => {
 
     // new sourceValues arrive mid-submit (e.g. a refetch resolving) -> must be ignored,
     // because the form is dirty and a submit is already in flight
-    act(() => {
+    await act(async () => {
       setSourceValues({ password: 'mid-submit' })
     })
     expect(form.current.data.password).toEqual('123456')
@@ -136,31 +130,39 @@ describe('react', () => {
     expect(form.current.data.password).toEqual('123456')
   })
 
-  test('reactivity', () => {
-    const {
-      result: { current: form },
-    } = renderHook(() =>
-      useForm({
-        schema: z.object({
-          name: z.string(),
-        }),
-        sourceValues: () => ({
-          name: 'John Doe',
-        }),
+  test('direct writes rerender the form owner', async () => {
+    const sourceValues = { name: 'John Doe' }
+    const { result } = renderHook(() => {
+      const form = useForm({
+        schema: z.object({ name: z.string() }),
+        sourceValues,
         async submit() {},
-      }),
-    )
-
-    expect(isReactive(form)).toBe(true)
-
-    const dataWatcher = vi.fn()
-    watch(() => form.data.name, dataWatcher)
-    const isChangedWatcher = vi.fn()
-    watch(() => form.isChanged, isChangedWatcher)
-
-    form.data.name = 'Jane Doe'
-
-    expect(dataWatcher).toHaveBeenCalledOnce()
-    expect(isChangedWatcher).toHaveBeenCalledOnce()
+      })
+      return { form, name: form.data.name, changed: form.isChanged }
+    })
+    await act(async () => {
+      result.current.form.data.name = 'Jane Doe'
+    })
+    expect(result.current.name).toBe('Jane Doe')
+    expect(result.current.changed).toBe(true)
   })
+})
+
+test('memoized field components update for field edits and their own props', async () => {
+  const sourceValues = { name: 'John' }
+  const { result } = renderHook(() =>
+    useForm({ schema: z.object({ name: z.string() }), sourceValues, async submit() {} }),
+  )
+  const Field = FormFieldMemo<string, { label: string }>(({ field, label }) =>
+    createElement('output', null, `${label}: ${field.value}`),
+  )
+  const field = result.current.fields.name.$use()
+  const view = render(createElement(Field, { field, label: 'Name' }))
+  expect(view.getByText('Name: John')).toBeDefined()
+  await act(async () => {
+    field.handleChange('Jane')
+  })
+  expect(view.getByText('Name: Jane')).toBeDefined()
+  view.rerender(createElement(Field, { field, label: 'Changed' }))
+  expect(view.getByText('Changed: Jane')).toBeDefined()
 })
