@@ -1,30 +1,39 @@
-import { reactive, watch } from '@vue/reactivity'
-import { describe, expect, test, vi } from 'vitest'
-import { refEffect } from './reactive'
+import { createStore, createRoot, createEffect, flush } from '@solidjs/signals'
+import { expect, test } from 'vitest'
+import { writable } from './reactive'
 
-describe('reactive', () => {
-  test('refEffect reactive unwrap', () => {
-    const re = refEffect(() => 1)
-
-    expect(re.value).toBe(1)
-
-    const refEffectWatcher = vi.fn()
-    watch(re, refEffectWatcher)
-
-    re.value = 2
-    expect(re.value).toBe(2)
-    expect(refEffectWatcher).toHaveBeenNthCalledWith(1, 2, 1, expect.anything())
-
-    const wrap = reactive({ re })
-    const reactiveWatcher = vi.fn()
-    const reactiveWatcher2 = vi.fn()
-    watch(() => wrap, reactiveWatcher, { deep: true })
-    watch(() => wrap.re, reactiveWatcher2)
-
-    wrap.re = 3
-    expect(re.value).toBe(3)
-    expect(refEffectWatcher).toHaveBeenNthCalledWith(2, 3, 2, expect.anything())
-    expect(reactiveWatcher).toHaveBeenNthCalledWith(1, { re: 3 }, { re: 3 }, expect.anything())
-    expect(reactiveWatcher2).toHaveBeenNthCalledWith(1, 3, 2, expect.anything())
+test('writable facade batches native array mutations and preserves object identity', () => {
+  const [store] = createStore({
+    rows: [{ name: 'a' }, { name: 'b' }],
+    optional: true as boolean | undefined,
   })
+  const data = writable(store)
+  const first = data.rows[0]
+  data.rows.reverse()
+  data.rows.push({ name: 'c' })
+  delete data.optional
+  flush()
+  expect(data.rows[1]).toBe(first)
+  expect(data.rows.map((row) => row.name)).toEqual(['b', 'a', 'c'])
+  expect(JSON.parse(JSON.stringify(data))).toEqual({
+    rows: [{ name: 'b' }, { name: 'a' }, { name: 'c' }],
+  })
+})
+
+test('array reads remain tracked by the engine', () => {
+  const [store] = createStore({ rows: [{ name: 'a' }] })
+  const data = writable(store)
+  const values: string[][] = []
+  createRoot(() =>
+    createEffect(
+      () => data.rows.map((row) => row.name),
+      (value) => {
+        values.push(value)
+      },
+    ),
+  )
+  flush()
+  data.rows[0]!.name = 'b'
+  flush()
+  expect(values).toEqual([['a'], ['b']])
 })

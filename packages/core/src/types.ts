@@ -1,5 +1,4 @@
 import type { StandardJSONSchemaV1, StandardSchemaV1 } from '@standard-schema/spec'
-import type { MaybeRefOrGetter, Reactive, UnwrapNestedRefs } from '@vue/reactivity'
 import type { Hookable, NestedHooks } from 'hookable'
 import type { JSONSchema } from 'json-schema-typed'
 import type {
@@ -74,9 +73,11 @@ export interface FormOptions<
   schema: Schema
   sourceValues: MaybeGetter<SourceValues>
   submit: (ctx: { values: SubmitValues }) => Promise<void | { success: boolean }>
-  disabled?: MaybeRefOrGetter<boolean>
+  disabled?: boolean | (() => boolean)
+  key?: string | ((item: object) => unknown) | null
   hooks?: NestedHooks<FormHookDefinitions<Schema>>
   [extend]?: {
+    wrap?: <T extends object>(value: T) => T
     setup?: <T>(field: FormFieldInternal<T>) => FormFieldExtend<T>
     $use?: <T>(field: FormFieldInternal<T>) => FormFieldExtend<T>
   }
@@ -95,11 +96,9 @@ export interface FormHookDefinitions<Schema extends FormSchema> {
   afterValidate: (result: StandardSchemaV1.Result<Schema>) => Promise<void> | void
   // beforeFieldReset: () => Promise<void> | void
   // afterFieldReset: () => Promise<void> | void
-  beforeFieldChange: (field: FormFieldInternal<unknown>, newValue: unknown | null) => void
-  afterFieldChange: (field: FormFieldInternal<unknown>, updatedValue: unknown | null) => void
+  beforeFieldChange: (field: FormFieldInternal<unknown>, newValue: unknown) => void
+  afterFieldChange: (field: FormFieldInternal<unknown>, updatedValue: unknown) => void
 }
-
-export const setContext = Symbol('setContext')
 
 // export type NonPrimitiveReadonly<T> = T extends Primitive
 //   ? T
@@ -147,15 +146,13 @@ export type FormFieldInternal<T> = {
   path: string
   key: string
   $?: () => BuildFormFieldAccessors<any>
-  [setContext]: (ctx: { path: string }) => void
 }
-export type FormFieldContext<T> = Parameters<FormFieldInternal<T>[typeof setContext]>[0]
 
 // eslint-disable-next-line unused-imports/no-unused-vars
 export interface FormFieldExtend<T> {}
 
 export interface FormField<T>
-  extends Readonly<Omit<FormFieldInternal<T>, '$'>>, UnwrapNestedRefs<FormFieldExtend<T>> {
+  extends Readonly<Omit<FormFieldInternal<T>, '$'>>, FormFieldExtend<T> {
   $: () => BuildFormFieldAccessors<T>
 }
 
@@ -273,9 +270,7 @@ export type BuildFormFieldAccessors<T, StopDiscriminator = false, _Root extends 
               : BuildFormFieldAccessors<TT[I]>
             : BuildFormFieldAccessors<TT[I]>
           delete: (key: string) => void
-          [Symbol.iterator]: () => ArrayIterator<
-            Reactive<BuildFormFieldAccessors<NonNullable<TT>[number]>>
-          >
+          [Symbol.iterator]: () => ArrayIterator<BuildFormFieldAccessors<NonNullable<TT>[number]>>
         } & FormFieldAccessor<T>
       : [NonNullable<T>] extends [Record<string, unknown>]
         ? ObjectHasFunctionsOrSymbols<T> extends true
