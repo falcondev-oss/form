@@ -206,6 +206,10 @@ function resolve(root: Schema, value: unknown): Resolved {
     meta = { ...meta, ...annotations(schema) }
   }
 
+  // `{type: ['string', 'null']}` encodes a nullable field without a union
+  const leafTypes = types(schema)
+  nullable ||= leafTypes.length > 1 && leafTypes.includes('null')
+
   if (!matched) meta = { ...annotations(firstLeaf(root)), ...meta }
 
   return { schema, meta, nullable }
