@@ -145,6 +145,22 @@ describe('inference', () => {
     expect(metaOptional.required).toBe(false)
   })
 
+  test('nullable as type array is optional', () => {
+    // zod >= 4.5 encodes `z.string().nullable()` as a type array instead of `anyOf`
+    const jsonSchema = {
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
+      type: 'object',
+      properties: {
+        nullable: { type: ['string', 'null'] },
+      },
+      required: ['nullable'],
+    } as const
+
+    expect(getSchemaMeta(jsonSchema, {}, 'nullable').required).toBe(false)
+    expect(getSchemaMeta(jsonSchema, { nullable: null }, 'nullable').required).toBe(false)
+    expect(getSchemaMeta(jsonSchema, { nullable: 'a' }, 'nullable').required).toBe(false)
+  })
+
   describe('discriminated union', () => {
     const zodSchema = z.discriminatedUnion('type', [
       z.object({ type: z.literal('string'), str: z.string().meta({ title: 'String' }) }),
