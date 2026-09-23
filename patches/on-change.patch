@@ -1,0 +1,16 @@
+diff --git a/source/index.js b/source/index.js
+index 71e5eff07b7e5777d47df7bbada2eeeea82e51d7..9bc19f3f47229cbf26c98f32cace756ed62b2770 100644
+--- a/source/index.js
++++ b/source/index.js
+@@ -85,6 +85,11 @@ const onChange = (object, onChange, options = {}) => {
+ 	const prepareValue = (value, target, property, basePath) => {
+ 		if (
+ 			isBuiltinWithoutMutableMethods(value)
++			// Treat non-plain host objects (File, Blob, FileList, DOM nodes, class
++			// instances, …) as opaque leaves: never proxy them. Their native getters
++			// are bound to internal slots and throw "Illegal invocation" when the
++			// receiver is a Proxy instead of the real object.
++			|| (value !== null && typeof value === 'object' && !SmartClone.isHandledType(value))
+ 			|| property === 'constructor'
+ 			|| (isShallow && !SmartClone.isHandledMethod(target, property))
+ 			|| ignoreProperty(cache, options, property)
