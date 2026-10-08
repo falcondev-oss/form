@@ -44,4 +44,6 @@ jobs:
       - name: pnpm install
         uses: falcondev-it/.github/actions/pnpm-install@master
 
+      - run: pnpm --filter @falcondev-oss/form-core exec playwright install --with-deps --only-shell chromium
+
       - run: pnpm run test

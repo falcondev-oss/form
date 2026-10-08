@@ -15,11 +15,10 @@ import type {
 } from './types'
 import { computed, reactive, ref, shallowReadonly, toRaw, toRefs, watch } from '@vue/reactivity'
 import { deleteProperty, setProperty } from 'dot-prop'
-import { isDeepEqual } from 'remeda'
 import { refEffect } from './reactive'
 import { getSchemaMeta } from './json-schema'
 import { extend, setContext } from './types'
-import { getFieldCachePath, getProperty, pathSegmentsToPathString } from './util'
+import { getFieldCachePath, getProperty, isDeepEqual, pathSegmentsToPathString } from './util'
 
 export type Form<Schema extends FormSchema> = {
   hooks: Hookable<FormHookDefinitions<Schema>>
@@ -215,7 +214,7 @@ export class FormField<T, Schema extends FormSchema> {
       handleChange: this.#handleChange.bind(this),
       handleBlur: this.#handleBlur.bind(this),
       reset: this.#reset.bind(this),
-      isChanged: computed(() => !isDeepEqual<unknown>(this.#value.value, this.#sourceValue.value)),
+      isChanged: computed(() => !isDeepEqual(this.#value.value, this.#sourceValue.value)),
       isDirty: computed(() => this.#updateCount.value !== 0),
       isPending: form.isPending,
       value: shallowReadonly(this.#value) as Ref<T>,

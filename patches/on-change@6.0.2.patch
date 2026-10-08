@@ -1,0 +1,12 @@
+diff --git a/source/is-builtin.js b/source/is-builtin.js
+index caa7ac652cfdc3275ae1976c9fffb8588a08f436..abd0d9a83deb1495df8e4ded7d62db97036866dd 100644
+--- a/source/is-builtin.js
++++ b/source/is-builtin.js
+@@ -13,5 +13,6 @@ export function isBuiltinWithoutMutableMethods(value) {
+ 		|| (typeof value !== 'object' && typeof value !== 'function')
+ 		|| value instanceof RegExp
+ 		|| value instanceof ArrayBuffer
+-		|| (typeof SharedArrayBuffer !== 'undefined' && value instanceof SharedArrayBuffer);
++		|| (typeof SharedArrayBuffer !== 'undefined' && value instanceof SharedArrayBuffer)
++		|| (typeof Blob !== 'undefined' && value instanceof Blob);
+ }

@@ -1,5 +1,6 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 import { getProperty as getProperty_ } from 'dot-prop'
+import { isArray, isPlainObject, isDeepEqual as isDeepEqual_ } from 'remeda'
 
 export function pathSegmentsToPathString(
   issuePath: readonly (PropertyKey | StandardSchemaV1.PathSegment)[],
@@ -43,6 +44,22 @@ export const getProperty = ((
   if (args[1].length === 0) return args[0]
   return getProperty_(...args)
 }) as typeof getProperty_
+
+// remeda compares class instances by own keys, so any two `File`s would be equal
+export function isDeepEqual(a: unknown, b: unknown): boolean {
+  if (isArray(a) && isArray(b))
+    return a.length === b.length && a.every((value, i) => isDeepEqual(value, b[i]))
+  if (isPlainObject(a) && isPlainObject(b)) return hasSubObject(a, b) && hasSubObject(b, a)
+  if (a instanceof Blob || b instanceof Blob) return a === b
+  return isDeepEqual_(a, b)
+}
+
+export function hasSubObject(data: object, subObject: object) {
+  return Object.entries(subObject).every(
+    ([key, value]) =>
+      Object.hasOwn(data, key) && isDeepEqual(value, (data as Record<string, unknown>)[key]),
+  )
+}
 
 export function isPrimitive(value: unknown): value is string | number | boolean {
   return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'

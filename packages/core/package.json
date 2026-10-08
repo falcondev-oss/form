@@ -67,16 +67,18 @@
     "hookable": "^6.1.1",
     "json-schema-typed": "^8.0.2",
     "klona": "^2.0.6",
-    "on-change": "^6.0.2",
     "remeda": "^2.39.0",
     "ts-pattern": "^5.9.0",
     "type-fest": "^5.8.0"
   },
   "devDependencies": {
     "@ark/schema": "^0.56.2",
+    "@vitest/browser-playwright": "^4.1.11",
     "arktype": "^2.2.3",
+    "on-change": "^6.0.2",
+    "playwright": "^1.63.0",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.10",
+    "vitest": "^4.1.11",
     "zod": "^4.4.3"
   }
 }

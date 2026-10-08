@@ -17,13 +17,19 @@ import { deleteProperty, getProperty, setProperty } from 'dot-prop'
 import { createHooks } from 'hookable'
 import { klona } from 'klona/full'
 import onChange from 'on-change'
-import { hasAtLeast, hasSubObject, isArray } from 'remeda'
+import { hasAtLeast, isArray } from 'remeda'
 import { match, P } from 'ts-pattern'
 import { FormField } from './field'
 import { toReactive } from './reactive'
 import { toJsonSchema } from './json-schema'
 import { extend, setContext } from './types'
-import { debugLog, escapePathSegment, getFieldCachePath, pathSegmentsToPathString } from './util'
+import {
+  debugLog,
+  escapePathSegment,
+  getFieldCachePath,
+  hasSubObject,
+  pathSegmentsToPathString,
+} from './util'
 
 type ArrayMutationMethod =
   'push' | 'pop' | 'unshift' | 'shift' | 'splice' | 'sort' | 'reverse' | 'fill'
@@ -352,7 +358,7 @@ export function useFormCore<
     hooks: markRaw(hooks as FormHooks<FormHookDefinitions<Schema>>),
     fields: markRaw({} as BuildFormFieldAccessors<Data, false, true>),
     isDirty,
-    isChanged: computed(() => !hasSubObject<object, object>(sourceValues.value ?? {}, formData)),
+    isChanged: computed(() => !hasSubObject(sourceValues.value ?? {}, formData)),
     isLoading,
     isDisabled: disabled,
     data: computed(
