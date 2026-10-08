@@ -49,6 +49,27 @@ describe('form', () => {
       expect(form.data.name).toBe('Jane Doe')
       expect(form.isChanged).toBe(true)
     })
+
+    test('replaced File', () => {
+      const form = useFormCore({
+        schema: z.object({
+          file: z.instanceof(File),
+        }),
+        sourceValues: {
+          file: new File(['a'], 'a.txt'),
+        },
+        async submit() {},
+      })
+      const field = form.fields.file.$use()
+
+      expect(form.isChanged).toBe(false)
+      expect(field.isChanged).toBe(false)
+
+      field.handleChange(new File(['b'], 'b.txt'))
+
+      expect(form.isChanged).toBe(true)
+      expect(field.isChanged).toBe(true)
+    })
   })
 
   test('data', () => {
