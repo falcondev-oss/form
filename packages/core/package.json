@@ -74,9 +74,11 @@
   },
   "devDependencies": {
     "@ark/schema": "^0.56.2",
+    "@vitest/browser-playwright": "^4.1.11",
     "arktype": "^2.2.3",
+    "playwright": "^1.63.0",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.10",
+    "vitest": "^4.1.11",
     "zod": "^4.4.3"
   }
 }

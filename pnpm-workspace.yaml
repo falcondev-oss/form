@@ -6,6 +6,9 @@ allowBuilds:
   esbuild: true
   unrs-resolver: true
 
+patchedDependencies:
+  on-change@6.0.2: patches/on-change@6.0.2.patch
+
 publicHoistPattern:
   - eslint-plugin-*
   - '@prettier/plugin-*'
