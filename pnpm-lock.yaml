@@ -252,9 +252,6 @@ importers:
       klona:
         specifier: ^2.0.6
         version: 2.0.6
-      on-change:
-        specifier: ^6.0.2
-        version: 6.0.2(patch_hash=ee8ffad1be05e0054ba2cb295c8e5fe5a5c2861557211c4ec0e9406cb7d07a15)
       remeda:
         specifier: ^2.39.0
         version: 2.39.0
@@ -274,6 +271,9 @@ importers:
       arktype:
         specifier: ^2.2.3
         version: 2.2.3
+      on-change:
+        specifier: ^6.0.2
+        version: 6.0.2(patch_hash=ee8ffad1be05e0054ba2cb295c8e5fe5a5c2861557211c4ec0e9406cb7d07a15)
       playwright:
         specifier: ^1.63.0
         version: 1.63.0
