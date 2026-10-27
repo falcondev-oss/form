@@ -1,4 +1,4 @@
-import { ref, watch } from '@vue/reactivity'
+import { effect, ref, watch } from '@vue/reactivity'
 import { until } from '@vueuse/core'
 import { type } from 'arktype'
 import { describe, expect, expectTypeOf, test, vi } from 'vitest'
@@ -410,6 +410,28 @@ describe('field', () => {
         value: number | null
       } | null>()
     }
+  })
+
+  test('root discriminator updates after reset', () => {
+    const form = useFormCore({
+      schema: z.discriminatedUnion('kind', [
+        z.object({ kind: z.literal('a'), a: z.string() }),
+        z.object({ kind: z.literal('b'), b: z.string() }),
+      ]),
+      sourceValues: () => ({ kind: 'a' as const, a: 'x' }),
+      async submit() {},
+    })
+    const root = form.fields.$use({ discriminator: 'kind' })
+
+    const seen: unknown[] = []
+    effect(() => seen.push(root.kind))
+
+    form.data.kind = 'b'
+    form.reset()
+    form.data.kind = 'b'
+
+    expect(seen).toEqual(['a', 'b', 'a', 'b'])
+    expect(form.fields.$use().isChanged).toBe(true)
   })
 
   test('sourceValues is undefined', async () => {
