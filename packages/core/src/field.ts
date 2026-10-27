@@ -13,7 +13,17 @@ import type {
   FormSchema,
   FormSourceValues,
 } from './types'
-import { computed, reactive, ref, shallowReadonly, toRaw, toRefs, watch } from '@vue/reactivity'
+import {
+  computed,
+  reactive,
+  ref,
+  shallowReadonly,
+  shallowRef,
+  toRaw,
+  toReactive,
+  toRefs,
+  watch,
+} from '@vue/reactivity'
 import { deleteProperty, setProperty } from 'dot-prop'
 import { refEffect } from './reactive'
 import { getSchemaMeta } from './json-schema'
@@ -61,7 +71,8 @@ export class FormField<T, Schema extends FormSchema> {
   }
   #updateCount = ref(0)
   #isEditing = ref(false)
-  #value = ref<T | null>(null)
+  // shallow: a deep ref would store the root field's `form.data` as `toRaw()`, a snapshot that goes stale after `reset()`
+  #value = shallowRef<T | null>(null)
   protected getValue() {
     return getProperty(this.#form.data, this.#context.value.path, null) as T
   }
@@ -107,7 +118,7 @@ export class FormField<T, Schema extends FormSchema> {
       value,
     )
 
-    this.#value.value = value
+    this.#value.value = toReactive(value)
 
     // const value = $opts?.translate?.set(_value) ?? _value
     setProperty(this.#form.data, this.#context.value.path, value)
