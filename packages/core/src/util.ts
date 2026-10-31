@@ -70,6 +70,14 @@ export function hasSubObject(data: object, subObject: object) {
   )
 }
 
+/** Deep-copies plain objects and arrays; class instances (File, Date, …) are kept by reference. */
+export function clonePlain<T>(value: T): T {
+  if (isArray(value)) return value.map(clonePlain) as T
+  if (isPlainObject(value))
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, clonePlain(v)])) as T
+  return value
+}
+
 export function isPrimitive(value: unknown): value is string | number | boolean {
   return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
 }

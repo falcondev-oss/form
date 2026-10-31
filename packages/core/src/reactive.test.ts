@@ -1,30 +1,56 @@
-import { reactive, watch } from '@vue/reactivity'
+import { createSignal, createStore, flush } from '@solidjs/signals'
 import { describe, expect, test, vi } from 'vitest'
-import { refEffect } from './reactive'
+import { commit, observe, trackDeep } from './reactive'
 
 describe('reactive', () => {
-  test('refEffect reactive unwrap', () => {
-    const re = refEffect(() => 1)
+  test('commit applies writes synchronously', () => {
+    const [count, setCount] = createSignal(0)
 
-    expect(re.value).toBe(1)
+    setCount(1)
+    expect(count()).toBe(0) // Solid 2.0 holds writes until the next flush
 
-    const refEffectWatcher = vi.fn()
-    watch(re, refEffectWatcher)
+    commit(() => setCount(2))
+    expect(count()).toBe(2)
+  })
 
-    re.value = 2
-    expect(re.value).toBe(2)
-    expect(refEffectWatcher).toHaveBeenNthCalledWith(1, 2, 1, expect.anything())
+  test('observe fires once per change and stops', () => {
+    const [count, setCount] = createSignal(0)
+    const spy = vi.fn()
 
-    const wrap = reactive({ re })
-    const reactiveWatcher = vi.fn()
-    const reactiveWatcher2 = vi.fn()
-    watch(() => wrap, reactiveWatcher, { deep: true })
-    watch(() => wrap.re, reactiveWatcher2)
+    const stop = observe(count, () => spy(count()))
+    expect(spy).not.toHaveBeenCalled()
 
-    wrap.re = 3
-    expect(re.value).toBe(3)
-    expect(refEffectWatcher).toHaveBeenNthCalledWith(2, 3, 2, expect.anything())
-    expect(reactiveWatcher).toHaveBeenNthCalledWith(1, { re: 3 }, { re: 3 }, expect.anything())
-    expect(reactiveWatcher2).toHaveBeenNthCalledWith(1, 3, 2, expect.anything())
+    commit(() => setCount(1))
+    commit(() => setCount(2))
+    expect(spy.mock.calls).toEqual([[1], [2]])
+
+    stop()
+    commit(() => setCount(3))
+    expect(spy).toHaveBeenCalledTimes(2)
+  })
+
+  test('commit inside an observe callback does not flush again', () => {
+    const [count, setCount] = createSignal(0)
+    const [double, setDouble] = createSignal(0)
+    const warn = vi.spyOn(console, 'warn')
+
+    observe(count, () => commit(() => setDouble(count() * 2)))
+    commit(() => setCount(2))
+
+    expect(double()).toBe(4)
+    expect(warn).not.toHaveBeenCalled()
+  })
+
+  test('trackDeep subscribes to nested values', () => {
+    const [store, setStore] = createStore({ nested: { list: [{ name: 'a' }] } })
+    const spy = vi.fn()
+
+    observe(() => trackDeep(store), spy)
+    setStore((draft) => {
+      draft.nested.list[0]!.name = 'b'
+    })
+    flush()
+
+    expect(spy).toHaveBeenCalledOnce()
   })
 })

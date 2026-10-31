@@ -1,11 +1,15 @@
-import { effect, ref, watch } from '@vue/reactivity'
-import { until } from '@vueuse/core'
+import { createRoot, createSignal, flush } from '@solidjs/signals'
 import { type } from 'arktype'
 import { Temporal } from 'temporal-polyfill'
 import { describe, expect, expectTypeOf, test, vi } from 'vitest'
 import z from 'zod'
 import { useFormCore } from './core'
+import { observe } from './reactive'
 import { sleep } from './util'
+
+async function until(condition: () => boolean) {
+  while (!condition()) await sleep(1)
+}
 
 describe('form', () => {
   describe('isChanged', () => {
@@ -115,9 +119,9 @@ describe('form', () => {
 
     const spy = vi.fn()
 
-    watch(
+    observe(
       () => form.data.name,
-      (value) => void spy(value),
+      () => spy(form.data.name),
     )
 
     form.fields.name.$use().handleChange('Isaac Newton')
@@ -126,11 +130,11 @@ describe('form', () => {
 
   describe('sourceValues', () => {
     test('forbid updates when dirty', () => {
-      const sourceValues = ref({
+      const [sourceValues, setSourceValues] = createSignal({
         name: 'John Doe',
       })
       const form = useFormCore({
-        sourceValues: () => sourceValues.value,
+        sourceValues,
         schema: z.object({
           name: z.string(),
         }),
@@ -140,25 +144,26 @@ describe('form', () => {
       form.data.name = 'Jane Doe'
       expect(form.data.name).toBe('Jane Doe')
 
-      sourceValues.value = {
+      setSourceValues({
         name: 'Alice Johnson',
-      }
+      })
+      flush()
       expect(form.data.name).toBe('Jane Doe')
     })
 
     test('allow updates during submit', async () => {
-      const sourceValues = ref({
+      const [sourceValues, setSourceValues] = createSignal({
         name: 'John Doe',
       })
       const form = useFormCore({
-        sourceValues: () => sourceValues.value,
+        sourceValues,
         schema: z.object({
           name: z.string(),
         }),
         async submit() {
-          sourceValues.value = {
+          setSourceValues({
             name: 'Jane Smith',
-          }
+          })
         },
       })
 
@@ -241,7 +246,7 @@ describe('form', () => {
   })
 
   test('form disabled state', async () => {
-    const disabled = ref(true)
+    const [disabled, setDisabled] = createSignal(true)
 
     const form = useFormCore({
       schema: z.object({
@@ -259,7 +264,8 @@ describe('form', () => {
     expect(form.isDisabled).toBe(true)
     expect(field.disabled).toBe(true)
 
-    disabled.value = false
+    setDisabled(false)
+    flush()
     expect(form.isLoading).toBe(false)
     expect(form.isDisabled).toBe(false)
     expect(field.disabled).toBe(false)
@@ -379,7 +385,7 @@ describe('field', () => {
         value: 'Hello',
       },
     }
-    const data = ref<typeof loadedData>()
+    const [data, setData] = createSignal<typeof loadedData>()
 
     const form = useFormCore({
       schema: z.object({
@@ -394,9 +400,7 @@ describe('field', () => {
           }),
         ]),
       }),
-      sourceValues() {
-        return data.value
-      },
+      sourceValues: data,
       async submit() {},
     })
 
@@ -417,7 +421,8 @@ describe('field', () => {
         | null
       >()
     }
-    data.value = loadedData
+    setData(loadedData)
+    flush()
 
     expect('type' in unionField.$field).toBe(true)
     expect('notFound' in unionField.$field).toBe(false)
@@ -451,8 +456,11 @@ describe('field', () => {
     })
     const root = form.fields.$use({ discriminator: 'kind' })
 
-    const seen: unknown[] = []
-    effect(() => seen.push(root.kind))
+    const seen: unknown[] = [root.kind]
+    observe(
+      () => root.kind,
+      () => seen.push(root.kind),
+    )
 
     form.data.kind = 'b'
     form.reset()
@@ -463,7 +471,7 @@ describe('field', () => {
   })
 
   test('sourceValues is undefined', async () => {
-    const isLoading = ref(true)
+    const [isLoading, setIsLoading] = createSignal(true)
 
     const form = useFormCore({
       schema: z.object({
@@ -472,7 +480,7 @@ describe('field', () => {
         }),
       }),
       sourceValues() {
-        if (isLoading.value) return
+        if (isLoading()) return
 
         return {
           person: { name: 'John Doe' },
@@ -493,7 +501,8 @@ describe('field', () => {
     nameField.handleChange('Input is ignored')
     expect(nameField.value).toBeNull()
 
-    isLoading.value = false
+    setIsLoading(false)
+    flush()
     expect(nameField.isPending).toBe(false)
     expect(form.isLoading).toBe(false)
 
@@ -502,7 +511,7 @@ describe('field', () => {
 
     const submit = form.submit()
 
-    await until(() => form.isLoading).toBe(true)
+    await until(() => form.isLoading)
     expect(form.isLoading).toBe(true)
     expect(nameField.isPending).toBe(false) // pending is only for loading source values
 
@@ -608,8 +617,9 @@ describe('field', () => {
     // @ts-expect-error Prevent assignment to readonly property
     form.fields.$use().value = {}
     expect(consoleWarnSpy).toHaveBeenLastCalledWith(
-      '[Vue warn] Set operation on key "value" failed: target is readonly.',
-      expect.anything(),
+      'useForm:',
+      'field.value is readonly, use field.handleChange() instead',
+      '()',
     )
 
     form.fields.$use().value.a = 'new value'
@@ -620,6 +630,154 @@ describe('field', () => {
     // pushing to array is allowed
     form.fields.array.$use().value?.push('three')
     expect(form.data.array).toEqual(['one', 'two', 'three'])
+  })
+})
+
+describe('solid', () => {
+  test('discriminated union handle narrows reactively', () => {
+    const form = useFormCore({
+      schema: z.object({
+        union: z.discriminatedUnion('type', [
+          z.object({ type: z.literal('A'), value: z.string() }),
+          z.object({ type: z.literal('B'), value: z.number() }),
+        ]),
+      }),
+      sourceValues: { union: { type: 'A' as const, value: 'x' } },
+      async submit() {},
+    })
+    const union = form.fields.union.$use({ discriminator: 'type' })
+
+    // property reads (not accessor calls) keep TypeScript's narrowing and stay tracked
+    const describeUnion = () => {
+      if (union.type === 'A') {
+        const field = union.$field.value.$use()
+        expectTypeOf(field.value).toEqualTypeOf<string | null>()
+        return `A:${field.value}`
+      }
+      if (union.type === 'B') {
+        const field = union.$field.value.$use()
+        expectTypeOf(field.value).toEqualTypeOf<number | null>()
+        return `B:${field.value?.toFixed(1)}`
+      }
+      return 'empty'
+    }
+
+    const seen = [describeUnion()]
+    observe(describeUnion, () => seen.push(describeUnion()))
+
+    form.data.union = { type: 'B', value: 2 }
+    if (union.type === 'B') union.$field.value.$use().handleChange(3)
+    form.fields.union.$use().handleChange(null)
+
+    expect(seen).toEqual(['A:x', 'B:2.0', 'B:3.0', 'empty'])
+  })
+
+  test('array mutations keep field keys with their items', () => {
+    const form = useFormCore({
+      schema: z.object({ items: z.array(z.object({ name: z.string() })) }),
+      sourceValues: { items: [{ name: 'a' }, { name: 'b' }, { name: 'c' }] },
+      async submit() {},
+    })
+    const keyAt = (index: number) => form.fields.items.at(index).$use().key
+    const names = () => form.data.items?.map((item) => item?.name)
+    const [keyA, keyB, keyC] = [keyAt(0), keyAt(1), keyAt(2)]
+
+    form.data.items!.unshift({ name: 'z' })
+    expect(names()).toEqual(['z', 'a', 'b', 'c'])
+    expect(keyAt(1)).toBe(keyA)
+
+    form.data.items!.reverse()
+    expect(names()).toEqual(['c', 'b', 'a', 'z'])
+    expect(keyAt(0)).toBe(keyC)
+
+    form.data.items!.sort((x, y) => (x?.name ?? '').localeCompare(y?.name ?? ''))
+    expect(names()).toEqual(['a', 'b', 'c', 'z'])
+    expect([keyAt(0), keyAt(1), keyAt(2)]).toEqual([keyA, keyB, keyC])
+
+    // keyB was created at index 1, but its item sits at index 1 only by coincidence: move it first
+    form.data.items!.splice(0, 1)
+    expect(names()).toEqual(['b', 'c', 'z'])
+    form.fields.items.delete(keyB)
+    expect(names()).toEqual(['c', 'z'])
+    expect(keyAt(0)).toBe(keyC)
+
+    expect(form.isDirty).toBe(true)
+  })
+
+  test('array iteration is tracked', () => {
+    const form = useFormCore({
+      schema: z.object({ tags: z.array(z.string()) }),
+      sourceValues: { tags: ['a'] },
+      async submit() {},
+    })
+    const lengths: number[] = []
+    const count = () => [...form.fields.tags].length
+    observe(count, () => lengths.push(count()))
+
+    form.data.tags!.push('b')
+    form.fields.tags.$use().value!.push('c')
+    form.fields.tags.delete(form.fields.tags.at(0).$use().key)
+
+    expect(lengths).toEqual([2, 3, 2])
+  })
+
+  test('$use inside an owned scope', () => {
+    let form!: ReturnType<typeof createNameForm>
+    let field!: ReturnType<typeof form.fields.name.$use>
+    function createNameForm() {
+      return useFormCore({
+        schema: z.object({ name: z.string() }),
+        sourceValues: { name: 'John' },
+        async submit() {},
+      })
+    }
+
+    // e.g. a Solid component body, where reactive writes are not allowed
+    const dispose = createRoot((dispose) => {
+      form = createNameForm()
+      field = form.fields.name.$use()
+      form.fields.name.$use({ translate: { get: (v) => v?.length, set: (v) => String(v) } })
+      return dispose
+    })
+
+    field.handleChange('Jane')
+    expect(form.data.name).toBe('Jane')
+    expect(field.isDirty).toBe(true)
+    dispose()
+  })
+
+  test('moved array field re-$use inside an owned scope', () => {
+    const form = useFormCore({
+      schema: z.object({ tags: z.array(z.string()) }),
+      sourceValues: { tags: ['a', 'b'] },
+      async submit() {},
+    })
+    const first = form.fields.tags.at(0).$use()
+    form.data.tags!.unshift('z')
+
+    const moved = createRoot(() => form.fields.tags.at(1).$use())
+
+    expect(moved).toBe(first)
+    expect(moved.path).toBe('tags[1]')
+    expect(moved.value).toBe('a')
+  })
+
+  test('writes from an observer callback', () => {
+    const form = useFormCore({
+      schema: z.object({ a: z.string(), b: z.string() }),
+      sourceValues: { a: '', b: '' },
+      async submit() {},
+    })
+    const warn = vi.spyOn(console, 'warn').mockClear()
+    observe(
+      () => form.data.a,
+      () => form.fields.b.$use().handleChange(`${form.data.a}!`),
+    )
+
+    form.data.a = 'x'
+
+    expect(form.data.b).toBe('x!')
+    expect(warn).not.toHaveBeenCalled()
   })
 })
 

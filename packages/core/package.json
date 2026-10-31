@@ -2,7 +2,7 @@
   "name": "@falcondev-oss/form-core",
   "type": "module",
   "version": "0.24.6",
-  "description": "Type-safe, framework agnostic form state library based on @vue/reactivity.",
+  "description": "Type-safe, framework agnostic form state library based on Solid 2.0 signals.",
   "license": "Apache-2.0",
   "repository": "github:falcondev-oss/form",
   "bugs": {
@@ -13,6 +13,7 @@
     "frontend",
     "state-management",
     "reactivity",
+    "solid",
     "typescript"
   ],
   "exports": {
@@ -58,11 +59,10 @@
     "type-check": "tsc --noEmit"
   },
   "peerDependencies": {
-    "@vue/reactivity": ">=3.5.28 <4"
+    "@solidjs/signals": "^2.0.0-rc.20"
   },
   "dependencies": {
     "@standard-schema/spec": "^1.1.0",
-    "@vueuse/core": "^14.4.0",
     "dot-prop": "^10.2.0",
     "hookable": "^6.1.1",
     "json-schema-typed": "^8.0.2",
@@ -73,9 +73,9 @@
   },
   "devDependencies": {
     "@ark/schema": "^0.56.2",
+    "@solidjs/signals": "2.0.0-rc.20",
     "@vitest/browser-playwright": "^4.1.11",
     "arktype": "^2.2.3",
-    "on-change": "^6.0.2",
     "playwright": "^1.63.0",
     "temporal-polyfill": "^1.0.6",
     "typescript": "^7.0.2",

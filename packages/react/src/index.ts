@@ -1,16 +1,14 @@
 import type {
   FormField,
-  FormFieldExtend,
   FormFieldProps,
   FormOptions,
   FormSchema,
   FormSourceValues,
 } from '@falcondev-oss/form-core'
-import type { ComputedRef } from '@vue/reactivity'
 import type { FunctionComponent, NamedExoticComponent } from 'react'
 import { extend, useFormCore } from '@falcondev-oss/form-core'
-import { refEffect } from '@falcondev-oss/form-core/reactive'
-import { computed, ref, watch } from '@vue/reactivity'
+import { commit, observe, toValue, trackDeep } from '@falcondev-oss/form-core/reactive'
+import { createMemo, createSignal } from '@solidjs/signals'
 import { memo, useEffect, useMemo, useState } from 'react'
 import { tick } from './util'
 
@@ -25,88 +23,81 @@ export type FieldModel<T> = {
 
 declare module '@falcondev-oss/form-core' {
   interface FormFieldExtend<T> {
-    model: ComputedRef<FieldModel<T>>
-    [tick]: number // Ref<number> // wait for https://github.com/vuejs/core/pull/13740
+    model: FieldModel<T>
+    [tick]: number
   }
+}
+
+function useRerender() {
+  const setTick = useState(0)[1]
+  return () => setTick((t) => t + 1)
 }
 
 export function useForm<
   const Schema extends FormSchema,
   SourceValues extends FormSourceValues<Schema> = FormSourceValues<Schema>,
 >(opts: FormOptions<Schema, SourceValues>): ReturnType<typeof useFormCore<Schema, SourceValues>> {
-  const setTick = useState(0)[1]
+  const rerender = useRerender()
 
-  const { form, sourceValuesRef, submitFnRef } = useMemo(() => {
-    const sourceValuesRef = refEffect(opts.sourceValues)
-    const submitFnRef = ref(opts.submit)
+  const { form, setSourceValues, submitFn } = useMemo(() => {
+    // boxed: a getter is a valid sourceValues value and must not be called as a signal updater
+    const [sourceValues, setSourceValues] = createSignal({ current: opts.sourceValues })
+    const submitFn = { current: opts.submit }
+    let tickValue = 0
 
-    const tickRef = ref(0)
     const form = useFormCore({
       ...opts,
-      submit: async (...args) => submitFnRef.value(...args),
-      sourceValues: () => sourceValuesRef.value,
+      submit: async (...args) => submitFn.current(...args),
+      sourceValues: () => toValue(sourceValues().current),
       [extend]: {
-        setup: () => {
-          return {
-            [tick]: tickRef as unknown as number, // wait for https://github.com/vuejs/core/pull/13740
-          } satisfies Omit<FormFieldExtend<any>, 'model'> as FormFieldExtend<any>
-        },
+        setup: () => ({
+          get [tick]() {
+            return tickValue
+          },
+        }),
         $use: (field) => {
-          watch(
+          observe(
             () => [field.errors, field.value],
             () => {
-              tickRef.value = Date.now()
-              setTick(Date.now())
+              tickValue++
+              rerender()
             },
           )
 
+          // memoized, so `field.model` keeps its identity between renders
+          const model = createMemo(() => ({ value: field.value, onUpdate: field.handleChange }))
           return {
-            // this needs to be a computed to ensure reactivity, because useForm is memoized
-            model: computed(() => ({
-              value: field.value,
-              onUpdate: field.handleChange,
-            })),
-          } satisfies Omit<FormFieldExtend<any>, typeof tick> as FormFieldExtend<any>
+            get model() {
+              return model()
+            },
+          }
         },
       },
     })
 
-    return {
-      form,
-      sourceValuesRef,
-      submitFnRef,
-    }
+    return { form, setSourceValues, submitFn }
   }, [])
 
   useEffect(() => {
-    submitFnRef.value = opts.submit
+    submitFn.current = opts.submit
   }, [opts.submit])
 
   useEffect(() => {
     if (typeof opts.sourceValues === 'function') return
-    sourceValuesRef.value = opts.sourceValues
+    commit(() => setSourceValues({ current: opts.sourceValues }))
   }, [opts.sourceValues])
 
-  useEffect(() => {
-    watch(
-      () => [form.errors, form.isLoading, form.isChanged, form.isDirty],
-      () => {
-        setTick(Date.now())
-      },
-    )
-  }, [])
+  useEffect(
+    () => observe(() => [form.errors, form.isLoading, form.isChanged, form.isDirty], rerender),
+    [],
+  )
 
   return form
 }
 
 export function useField<T>(field: FormField<T>) {
-  const setTick = useState(0)[1]
-  useEffect(() => {
-    const watcher = watch(field, () => {
-      setTick(Date.now())
-    })
-    return watcher.stop
-  }, [field])
+  const rerender = useRerender()
+  useEffect(() => observe(() => trackDeep({ ...field }), rerender), [field])
 
   return field
 }
@@ -114,14 +105,14 @@ export function useField<T>(field: FormField<T>) {
 export function FormFieldMemo<T, P extends object>(
   component: FunctionComponent<P & FormFieldProps<T>>,
 ): NamedExoticComponent<P & FormFieldProps<T>> {
-  const prevTick = ref<unknown>()
+  let prevTick: number | undefined
 
   return memo(component, (prev, next) => {
-    if (prevTick.value === next.field[tick]) {
+    if (prevTick === next.field[tick]) {
       return true // skip rerender
     }
 
-    prevTick.value = prev.field[tick]
+    prevTick = prev.field[tick]
     return false // rerender
   })
 }

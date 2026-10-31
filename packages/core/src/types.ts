@@ -1,5 +1,4 @@
 import type { StandardJSONSchemaV1, StandardSchemaV1 } from '@standard-schema/spec'
-import type { MaybeRefOrGetter, Reactive, UnwrapNestedRefs } from '@vue/reactivity'
 import type { Hookable, NestedHooks } from 'hookable'
 import type { JSONSchema } from 'json-schema-typed'
 import type {
@@ -74,11 +73,13 @@ export interface FormOptions<
   schema: Schema
   sourceValues: MaybeGetter<SourceValues>
   submit: (ctx: { values: SubmitValues }) => Promise<void | { success: boolean }>
-  disabled?: MaybeRefOrGetter<boolean>
+  disabled?: boolean | (() => boolean)
   hooks?: NestedHooks<FormHookDefinitions<Schema>>
   [extend]?: {
-    setup?: <T>(field: FormFieldInternal<T>) => FormFieldExtend<T>
-    $use?: <T>(field: FormFieldInternal<T>) => FormFieldExtend<T>
+    /** Runs once per field, under the form's reactive owner. Getters and setters are kept. */
+    setup?: <T>(field: FormFieldInternal<T>) => Partial<FormFieldExtend<T>>
+    /** Like `setup`, and again for every translated view of the field. */
+    $use?: <T>(field: FormFieldInternal<T>) => Partial<FormFieldExtend<T>>
   }
 }
 
@@ -155,7 +156,7 @@ export type FormFieldContext<T> = Parameters<FormFieldInternal<T>[typeof setCont
 export interface FormFieldExtend<T> {}
 
 export interface FormField<T>
-  extends Readonly<Omit<FormFieldInternal<T>, '$'>>, UnwrapNestedRefs<FormFieldExtend<T>> {
+  extends Readonly<Omit<FormFieldInternal<T>, '$'>>, FormFieldExtend<T> {
   $: () => BuildFormFieldAccessors<T>
 }
 
@@ -273,9 +274,7 @@ export type BuildFormFieldAccessors<T, StopDiscriminator = false, _Root extends 
               : BuildFormFieldAccessors<TT[I]>
             : BuildFormFieldAccessors<TT[I]>
           delete: (key: string) => void
-          [Symbol.iterator]: () => ArrayIterator<
-            Reactive<BuildFormFieldAccessors<NonNullable<TT>[number]>>
-          >
+          [Symbol.iterator]: () => ArrayIterator<BuildFormFieldAccessors<NonNullable<TT>[number]>>
         } & FormFieldAccessor<T>
       : [NonNullable<T>] extends [Record<string, unknown>]
         ? ObjectHasFunctionsOrSymbols<T> extends true
