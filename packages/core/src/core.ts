@@ -1,4 +1,6 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
+import type { PathSegment } from './data'
+import type { FormContext, FormField, LocatedIssue } from './field'
 import type {
   BuildFormFieldAccessors,
   FormData,
@@ -10,7 +12,6 @@ import type {
   FormSchema,
   FormSourceValues,
 } from './types'
-import type { FormContext, FormField } from './field'
 import {
   createMemo,
   createRoot,
@@ -21,22 +22,14 @@ import {
 } from '@solidjs/signals'
 import { createHooks } from 'hookable'
 import { klona } from 'klona/full'
-import { hasAtLeast } from 'remeda'
-import { createFormStore, toSegments } from './data'
+import { hasAtLeast, isArray } from 'remeda'
+import { createFormStore, toPlain } from './data'
 import { assignDescriptors, createFormField } from './field'
-import {
-  applyArrayChange,
-  deleteCacheItem,
-  getCachedField,
-  getCacheItem,
-  setCachedField,
-} from './field-cache'
 import { toJsonSchema } from './json-schema'
+import { locationId } from './location'
 import { commit, observe, toValue } from './reactive'
-import { extend, setContext } from './types'
-import { debugLog, escapePathSegment, hasSubObject, pathSegmentsToPathString } from './util'
-
-export type { FieldCache } from './field-cache'
+import { extend } from './types'
+import { debugLog, hasSubObject } from './util'
 
 export function useFormCore<
   const Schema extends FormSchema,
@@ -44,6 +37,13 @@ export function useFormCore<
 >(formOpts: FormOptions<Schema, SourceValues>) {
   // inside a Solid owner the form is disposed with it; otherwise it lives as long as it is referenced
   return createRoot(() => createForm<Schema, SourceValues>(formOpts))
+}
+
+function issueSegments(issue: StandardSchemaV1.Issue): PathSegment[] | undefined {
+  return issue.path?.map((segment) => {
+    const key = typeof segment === 'object' ? segment.key : segment
+    return typeof key === 'number' ? key : String(key)
+  })
 }
 
 function createForm<
@@ -63,37 +63,45 @@ function createForm<
   const [isValidating, setIsValidating] = createSignal(false)
   const isLoading = createMemo(() => isPending() || isValidating() || isSubmitting())
   const isDisabled = createMemo(() => isLoading() || (toValue(formOpts.disabled) ?? false))
-  const [formError, setFormError] = createSignal<StandardSchemaV1.FailureResult | undefined>(
-    undefined,
-  )
-  const errors = createMemo(() => {
-    const issues = formError()?.issues
-    return issues && hasAtLeast(issues, 1) ? issues : undefined
-  })
+  const [issues, setIssues] = createSignal<LocatedIssue[] | undefined>(undefined)
 
-  const fieldCache = {}
+  /** Fields by location id (item-bound) and by `field.key`. */
+  const fieldsById = new Map<string, FormField<unknown>>()
+  const fieldsByKey = new Map<string, FormField<unknown>>()
   const markEdited = () => setUpdateCount((c) => c + 1)
 
   const data = createFormStore(klona(untrack(sourceValues) ?? {}), {
-    beforeReplace(path) {
-      // a replaced array gets fresh item keys
-      if (getCacheItem(fieldCache, path)?._array) deleteCacheItem(fieldCache, path)
-    },
-    beforeArrayChange: (path, change) => applyArrayChange(fieldCache, path, change),
+    owner,
+    itemKey: formOpts.itemKey,
     onWrite: markEdited,
-    afterWrite: (path) => void getCachedField(fieldCache, path)?.validate(),
+    afterWrite: (id) => void fieldsById.get(id)?.validate(),
   })
-  const formData = data.get([]) as Data
+  // data and source share item keys, so an item finds its own source value after moving
+  const [sourceStored, setSourceStored] = createSignal<unknown>(data.snapshotStored())
+  const formData = data.root() as Data
 
-  const isChanged = createMemo(() => !hasSubObject(sourceValues() ?? {}, data.state))
+  const isChanged = createMemo(
+    () => !hasSubObject(sourceValues() ?? {}, toPlain(data.state) as object),
+  )
+  // issue paths follow their items: they show where the item is now
+  const errors = createMemo(() => {
+    const current = issues()?.map(({ issue, location }) => {
+      const resolved = data.resolve(location)
+      return resolved ? { ...issue, path: resolved.segments } : issue
+    })
+    return current && hasAtLeast(current, 1) ? current : undefined
+  })
 
   function reset() {
     debugLog(() => ['useForm: reset()'])
 
+    // items keep their keys (and fields) where they match the new source values
+    const stored = data.prepare(klona(untrack(sourceValues) ?? {}))
     commit(() => {
-      data.replace(klona(untrack(sourceValues) ?? {}))
+      data.writeStored([], stored)
+      setSourceStored(stored)
       setUpdateCount(0)
-      setFormError(undefined)
+      setIssues(undefined)
     })
   }
 
@@ -122,16 +130,46 @@ function createForm<
   const standardSchema = formOpts.schema['~standard']
   const jsonSchema = toJsonSchema(formOpts.schema)
 
+  /**
+   * Validates all data and pins each issue to the item it was reported for.
+   * Synchronous for synchronous schemas, so callers settle after a single `await`.
+   */
+  function runValidation() {
+    const stored = data.snapshotStored()
+    const locate = (result: StandardSchemaV1.Result<Schema>) => ({
+      result,
+      issues: result.issues?.flatMap((issue): LocatedIssue[] => {
+        const segments = issueSegments(issue)
+        if (!segments) return []
+        const location = data.locateIn(stored, segments)
+        return [{ issue, location, id: locationId(location) }]
+      }),
+    })
+
+    const result = standardSchema.validate(toPlain(stored)) as
+      StandardSchemaV1.Result<Schema> | Promise<StandardSchemaV1.Result<Schema>>
+    return result instanceof Promise ? result.then(locate) : locate(result)
+  }
+
   const context: FormContext<Schema> = {
     owner,
     hooks,
     opts: formOpts as FormContext<Schema>['opts'],
     jsonSchema,
-    fieldCache,
     data,
-    sourceValues,
-    formError,
-    setFormError,
+    sourceStored,
+    issues,
+    setIssues,
+    validate: () => {
+      const validation = runValidation()
+      return validation instanceof Promise ? validation.then((v) => v.issues) : validation.issues
+    },
+    isClaimed: (id) => fieldsById.has(id),
+    rebind(field, previousId, nextId) {
+      if (fieldsById.get(previousId) === field) fieldsById.delete(previousId)
+      if (!fieldsById.has(nextId)) fieldsById.set(nextId, field)
+    },
+    accessor: (segments) => createAccessor(segments),
     markEdited,
     isDirty,
     isDisabled,
@@ -154,7 +192,7 @@ function createForm<
     const read = (key: PropertyKey) => {
       if (key === discriminator)
         return (field.api.value as Record<string, unknown> | null)?.[discriminator] ?? null
-      if (key === '$field') return createFormFieldProxy(field.api.path)
+      if (key === '$field') return createAccessor(field.segments())
     }
     const keys = [discriminator, '$field']
     const handle = new Proxy(Object.create(null) as object, {
@@ -170,22 +208,22 @@ function createForm<
     return handle
   }
 
-  function useField(path: string, $opts?: FormFieldAccessorOptions<unknown>) {
-    let field = getCachedField(fieldCache, path)
-    if (field) {
-      field.api[setContext]({ path })
-    } else {
-      debugLog(() => ['$use', path])
+  /** `$use()`: the field of whatever is at `segments` now, bound to it from here on. */
+  function useField(segments: PathSegment[], $opts?: FormFieldAccessorOptions<unknown>) {
+    const location = data.locate(segments)
+    const id = locationId(location)
+    let field = fieldsById.get(id)
+    if (!field) {
+      debugLog(() => ['$use', id])
 
-      const created = runWithOwner(owner, () => {
-        const f = createFormField<unknown, Schema>(path, context)
-        Object.assign(f.api, { $: () => createFormFieldProxy(f.api.path) })
-        assignDescriptors(f.api, formOpts[extend]?.setup?.(f.api))
-        assignDescriptors(f.api, formOpts[extend]?.$use?.(f.api))
-        return f
+      field = runWithOwner(owner, () => {
+        const created = createFormField<unknown, Schema>(location, context)
+        assignDescriptors(created.api, formOpts[extend]?.setup?.(created.api))
+        assignDescriptors(created.api, formOpts[extend]?.$use?.(created.api))
+        return created
       })
-      setCachedField(fieldCache, path, created)
-      field = created
+      fieldsById.set(id, field)
+      fieldsByKey.set(field.api.key, field)
     }
 
     if ($opts?.discriminator) return discriminatedHandle(field, $opts.discriminator)
@@ -193,92 +231,86 @@ function createForm<
     return field.api
   }
 
-  function createFormFieldProxy(path = '') {
-    const segments = toSegments(path)
-    const readArray = () => data.read(segments) as unknown[] | null | undefined
+  function deleteItem(segments: PathSegment[], key: string) {
+    if (!isArray(data.readAt(segments))) throw new Error("Can't delete item when field is null")
+    if (!/@[^@]+$/.test(key)) throw new Error('Invalid key')
+
+    const arrayLocation = untrack(() => data.locate(segments))
+    const field = fieldsByKey.get(key)
+    const itemLocation = field && untrack(field.location)
+    const lastStep = itemLocation?.at(-1)
+    if (
+      !itemLocation ||
+      !lastStep ||
+      !('item' in lastStep) ||
+      locationId(itemLocation.slice(0, -1)) !== locationId(arrayLocation)
+    )
+      throw new Error('Key does not reference an array item')
+
+    const resolved = untrack(() => data.resolve(itemLocation))
+    // already removed
+    if (!resolved) return
+    data.mutateArray(arrayLocation, 'splice', [resolved.segments.at(-1), 1])
+  }
+
+  /** Accessors are addresses: every read and `$use()` resolves the position again. */
+  function createAccessor(segments: PathSegment[]): BuildFormFieldAccessors<Data, false, true> {
+    const read = () => data.readAt(segments)
 
     return new Proxy(Object.create(null) as BuildFormFieldAccessors<Data, false, true>, {
       ownKeys() {
-        const fieldValue = data.read(segments)
-        return fieldValue && typeof fieldValue === 'object' ? Object.keys(fieldValue) : []
+        const node = read()
+        if (isArray(node)) return [...node.keys()].map(String)
+        return node !== null && typeof node === 'object' ? Object.keys(node) : []
       },
       getOwnPropertyDescriptor(_target, _key) {
         return { enumerable: true, configurable: true, writable: false }
       },
       has(_target, prop: string) {
-        const fieldValue = data.read(segments)
-        return !!fieldValue && typeof fieldValue === 'object' && Reflect.has(fieldValue, prop)
+        const node = read()
+        if (isArray(node)) return /^\d+$/.test(prop) && Number(prop) < node.length
+        return node !== null && typeof node === 'object' && Reflect.has(node, prop)
       },
       get(_target, prop: string | symbol) {
         if (prop === Symbol.iterator) {
-          const array = readArray()
-          if (array === null || array === undefined) return () => [].values()
-          if (!Array.isArray(array)) return
+          const node = read()
+          if (node === null || node === undefined) return () => [].values()
+          if (!isArray(node)) return
 
           // reading `length` here too subscribes whoever fetches the iterator (e.g. the Vue bridge)
-          void array.length
+          const { length } = node
           return () =>
-            Array.from({ length: array.length }, (_, i) =>
-              createFormFieldProxy(`${path}[${i}]`),
+            Array.from({ length: (read() as unknown[] | undefined)?.length ?? length }, (_, i) =>
+              createAccessor([...segments, i]),
             ).values()
         }
 
         if (typeof prop === 'symbol') return
 
-        if (prop === 'at') {
-          return (index: number) => {
-            const length = readArray()?.length ?? 0
-            return createFormFieldProxy(`${path}[${index >= 0 ? index : length + index}]`)
-          }
-        }
-
-        if (prop === 'delete') {
-          return (key: string) => {
-            if (!readArray()) throw new Error("Can't delete item when field is null")
-
-            const keyPath = key.match(/(.*)@[^@]+$/)?.[1]
-            if (!keyPath) throw new Error('Invalid key')
-
-            const index = keyPath.match(/\[(\d+)\]$/)?.[1]
-            if (keyPath !== `${path}[${index}]` || index === undefined)
-              throw new Error('Key does not reference an array item')
-
-            // the key holds the item's index at creation; the cache knows where it moved since
-            const currentIndex =
-              getCacheItem(fieldCache, path)?._array?.findIndex(
-                (item) => item?.$field?.api.key === key,
-              ) ?? -1
-            data.mutateArray(path, 'splice', [currentIndex >= 0 ? currentIndex : Number(index), 1])
-          }
-        }
-
+        if (prop === 'at') return (index: number) => createAccessor([...segments, index])
+        if (prop === 'delete') return (key: string) => deleteItem(segments, key)
         if (prop === '$use')
-          return ($opts?: FormFieldAccessorOptions<unknown>) => useField(path, $opts)
+          return ($opts?: FormFieldAccessorOptions<unknown>) => useField(segments, $opts)
 
-        const propPath = path ? `${path}.${escapePathSegment(prop)}` : escapePathSegment(prop)
-        return createFormFieldProxy(propPath)
+        return createAccessor([...segments, prop])
       },
     })
   }
 
   async function validateForm() {
     await hooks.callHook('beforeValidate')
-    const result = (await Promise.resolve(
-      standardSchema.validate(data.snapshot()),
-    )) as StandardSchemaV1.Result<Schema>
+    const { result, issues: located } = await runValidation()
     await hooks.callHook('afterValidate', result)
 
-    if (!result.issues) {
-      commit(() => setFormError(undefined))
-      return result.value
+    if (!located) {
+      commit(() => setIssues(undefined))
+      return result.issues ? undefined : result.value
     }
 
-    commit(() => setFormError(result))
+    commit(() => setIssues(located))
 
-    for (const issue of result.issues) {
-      if (!issue.path) continue
-      if (getCachedField(fieldCache, pathSegmentsToPathString(issue.path))) continue
-
+    for (const { issue, id } of located) {
+      if (fieldsById.has(id)) continue
       console.warn('useForm: Detected validation issue in possibly unused field:', issue)
     }
   }
@@ -328,11 +360,9 @@ function createForm<
     }
   }
 
-  const fields = createFormFieldProxy()
-
   const formApi = {
     hooks: hooks as FormHooks<FormHookDefinitions<Schema>>,
-    fields,
+    fields: createAccessor([]),
     get isDirty() {
       return isDirty()
     },

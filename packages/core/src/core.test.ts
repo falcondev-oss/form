@@ -545,7 +545,7 @@ describe('field', () => {
       expect(form.data['foo.bar']).toBe('Test')
       expect(stringField.path).toBe(String.raw`foo\.bar`)
 
-      // array (has special cache handling)
+      // array items under an escaped key
       const arrayField = form.fields['foo.bar.array'].at(0).$use()
       expect(arrayField.value).toBe('one')
       expect(form.data['foo.bar.array']?.[0]).toEqual('one')
@@ -553,7 +553,10 @@ describe('field', () => {
       form.data['foo.bar.array']?.unshift('zero')
 
       expect(form.data['foo.bar.array']?.[0]).toEqual('zero')
-      expect(arrayField.value).toBe('zero')
+      // the field stays with its item
+      expect(arrayField.value).toBe('one')
+      expect(arrayField.path).toBe(String.raw`foo\.bar\.array[1]`)
+      expect(form.fields['foo.bar.array'].at(0).$use().value).toBe('zero')
     })
 
     test('array value without array itself', () => {
@@ -574,7 +577,11 @@ describe('field', () => {
       form.data.array?.unshift('zero')
 
       expect(form.data.array?.[0]).toEqual('zero')
-      expect(arrayField.value).toBe('zero')
+      // the field stays with its item, the accessor resolves the position again
+      expect(arrayField.value).toBe('one')
+      expect(arrayField.path).toBe('array[1]')
+      expect(form.fields.array.at(0).$use().value).toBe('zero')
+      expect(form.fields.array.at(1).$use()).toBe(arrayField)
     })
 
     test('root value', () => {
@@ -778,6 +785,178 @@ describe('solid', () => {
 
     expect(form.data.b).toBe('x!')
     expect(warn).not.toHaveBeenCalled()
+  })
+})
+
+describe('item identity', () => {
+  const rowsSchema = z.object({
+    rows: z.array(z.object({ id: z.number().optional(), name: z.string().min(1) })),
+  })
+  type Rows = { rows: { id?: number; name: string | null }[] }
+  const names = (form: { data: unknown }) => (form.data as Rows).rows.map((row) => row.name)
+
+  test('errors stay with their item when the list is reordered', async () => {
+    const form = useFormCore({
+      schema: rowsSchema,
+      sourceValues: { rows: [{ name: 'a' }, { name: '' }] },
+      async submit() {},
+    })
+    const invalid = form.fields.rows.at(1).name.$use()
+
+    await form.submit()
+    expect(invalid.errors).toHaveLength(1)
+    expect(form.errors?.[0]?.path).toEqual(['rows', 1, 'name'])
+
+    form.data.rows!.unshift({ name: 'new' })
+
+    expect(invalid.errors).toHaveLength(1)
+    expect(invalid.path).toBe('rows[2].name')
+    expect(form.fields.rows.at(1).name.$use().errors).toBeUndefined()
+    expect(form.errors?.[0]?.path).toEqual(['rows', 2, 'name'])
+  })
+
+  test('a removed item detaches its fields', () => {
+    const form = useFormCore({
+      schema: rowsSchema,
+      sourceValues: { rows: [{ name: 'a' }, { name: 'b' }] },
+      async submit() {},
+    })
+    const first = form.fields.rows.at(0).name.$use()
+    const warn = vi.spyOn(console, 'warn').mockClear()
+
+    form.data.rows!.shift()
+
+    expect(first.isDetached).toBe(true)
+    expect(first.value).toBe('a') // last value
+    first.handleChange('late write')
+    expect(names(form)).toEqual(['b'])
+    expect(warn).toHaveBeenCalledWith(
+      'useForm:',
+      'handleChange() was ignored, the array item of this field was removed',
+      '(rows[0].name)',
+    )
+  })
+
+  test('items match by id when the source values are refreshed', () => {
+    const [source, setSource] = createSignal<Rows>({
+      rows: [
+        { id: 1, name: 'a' },
+        { id: 2, name: 'b' },
+      ],
+    })
+    const form = useFormCore({ schema: rowsSchema, sourceValues: source, async submit() {} })
+    const second = form.fields.rows.at(1).$use()
+
+    setSource({
+      rows: [
+        { id: 3, name: 'c' },
+        { id: 2, name: 'b2' },
+        { id: 1, name: 'a' },
+      ],
+    })
+    flush()
+
+    expect(second.path).toBe('rows[1]')
+    expect(second.value?.name).toBe('b2')
+    expect(form.fields.rows.at(2).$use().key).not.toBe(second.key)
+    expect(form.fields.rows.at(1).$use()).toBe(second)
+  })
+
+  test('items without id match by position on replace', () => {
+    const form = useFormCore({
+      schema: rowsSchema,
+      sourceValues: { rows: [{ name: 'a' }, { name: 'b' }] },
+      async submit() {},
+    })
+    const second = form.fields.rows.at(1).name.$use()
+
+    form.fields.rows.$use().handleChange([{ name: 'x' }, { name: 'y' }, { name: 'z' }])
+
+    expect(second.isDetached).toBe(false)
+    expect(second.value).toBe('y')
+  })
+
+  test('custom itemKey', () => {
+    const form = useFormCore({
+      schema: z.object({ rows: z.array(z.object({ uuid: z.string(), name: z.string() })) }),
+      sourceValues: { rows: [{ uuid: 'u1', name: 'a' }] },
+      itemKey: 'uuid',
+      async submit() {},
+    })
+    const row = form.fields.rows.at(0).$use()
+
+    form.data.rows = [
+      { uuid: 'u2', name: 'b' },
+      { uuid: 'u1', name: 'a2' },
+    ]
+
+    expect(row.path).toBe('rows[1]')
+    expect(row.value?.name).toBe('a2')
+  })
+
+  test('a field used before its data loads binds to the loaded item', () => {
+    const [source, setSource] = createSignal<Rows>()
+    const form = useFormCore({ schema: rowsSchema, sourceValues: source, async submit() {} })
+    const first = form.fields.rows.at(0).name.$use()
+    expect(first.value).toBeNull()
+
+    setSource({ rows: [{ name: 'a' }, { name: 'b' }] })
+    flush()
+    expect(first.value).toBe('a')
+
+    form.data!.rows!.reverse()
+    expect(first.value).toBe('a')
+    expect(first.path).toBe('rows[1].name')
+  })
+
+  test('at(-1) is the last item when used', () => {
+    const form = useFormCore({
+      schema: z.object({ tags: z.array(z.string()) }),
+      sourceValues: { tags: ['a', 'b'] },
+      async submit() {},
+    })
+    const last = form.fields.tags.at(-1)
+
+    expect(last.$use().value).toBe('b')
+    form.data.tags!.push('c')
+    expect(last.$use().value).toBe('c')
+  })
+
+  test('data proxies of items follow their item', () => {
+    const form = useFormCore({
+      schema: rowsSchema,
+      sourceValues: { rows: [{ name: 'a' }] },
+      async submit() {},
+    })
+    const row = form.data.rows![0]!
+
+    form.data.rows!.unshift({ name: 'z' })
+    row.name = 'a2'
+
+    expect(names(form)).toEqual(['z', 'a2'])
+  })
+
+  test('isChanged and reset compare an item with its own source value', () => {
+    const form = useFormCore({
+      schema: rowsSchema,
+      sourceValues: { rows: [{ name: 'a' }, { name: 'b' }] },
+      async submit() {},
+    })
+    const rows = form.fields.rows.$use()
+    const a = form.fields.rows.at(0).$use()
+
+    form.data.rows!.reverse()
+    expect(a.isChanged).toBe(false)
+    expect(rows.isChanged).toBe(true)
+
+    form.data.rows!.push({ name: 'c' })
+    const added = form.fields.rows.at(2).$use()
+    expect(added.isChanged).toBe(true)
+
+    rows.reset()
+    expect(names(form)).toEqual(['a', 'b'])
+    expect(a.path).toBe('rows[0]')
+    expect(added.isDetached).toBe(true)
   })
 })
 
@@ -987,10 +1166,9 @@ describe('hooks', () => {
       { a: '2', b: 2 },
       { a: '3', b: 3 },
     ])
+    // created before its item existed: bound to the first item that appeared there
     expect(a2.value).toBe('3')
-
-    // after handleChange, fieldCache is cleared
-    expect(form.fields.items.at(2)?.a.$use().key).not.toBe(a2PrevKey)
+    expect(form.fields.items.at(2)?.a.$use().key).toBe(a2PrevKey)
 
     expect(form.data.items).toEqual([
       { a: '1', b: 1 },

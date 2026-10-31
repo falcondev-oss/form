@@ -75,6 +75,12 @@ export interface FormOptions<
   submit: (ctx: { values: SubmitValues }) => Promise<void | { success: boolean }>
   disabled?: boolean | (() => boolean)
   hooks?: NestedHooks<FormHookDefinitions<Schema>>
+  /**
+   * Identifies array items when an array is replaced (`reset`, new `sourceValues`,
+   * `handleChange([...])`), so fields stay with their item. Items without an id
+   * are matched by position. Default: `'id'`.
+   */
+  itemKey?: string | ((item: unknown) => unknown)
   [extend]?: {
     /** Runs once per field, under the form's reactive owner. Getters and setters are kept. */
     setup?: <T>(field: FormFieldInternal<T>) => Partial<FormFieldExtend<T>>
@@ -99,8 +105,6 @@ export interface FormHookDefinitions<Schema extends FormSchema> {
   beforeFieldChange: (field: FormFieldInternal<unknown>, newValue: unknown | null) => void
   afterFieldChange: (field: FormFieldInternal<unknown>, updatedValue: unknown | null) => void
 }
-
-export const setContext = Symbol('setContext')
 
 // export type NonPrimitiveReadonly<T> = T extends Primitive
 //   ? T
@@ -143,14 +147,14 @@ export type FormFieldInternal<T> = {
   reset: () => void
   disabled: boolean
   isPending: boolean
+  /** The array item this field belongs to was removed; `handleChange()` is refused. */
+  isDetached: boolean
   isDirty: boolean
   isChanged: boolean
   path: string
   key: string
   $?: () => BuildFormFieldAccessors<any>
-  [setContext]: (ctx: { path: string }) => void
 }
-export type FormFieldContext<T> = Parameters<FormFieldInternal<T>[typeof setContext]>[0]
 
 // eslint-disable-next-line unused-imports/no-unused-vars
 export interface FormFieldExtend<T> {}
@@ -183,7 +187,7 @@ export type FormFieldAccessor<T> = {
   }) => NoInfer<FormField<If<IsUnknown<O>, T, O>>>
 }
 
-type FormFieldDiscriminatorAccessor<T, DiscriminatorKey extends PropertyKey> = {
+export type FormFieldDiscriminatorAccessor<T, DiscriminatorKey extends PropertyKey> = {
   $use: <
     Opts extends {
       discriminator?: DiscriminatorKey
