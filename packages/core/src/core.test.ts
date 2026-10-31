@@ -960,6 +960,90 @@ describe('item identity', () => {
   })
 })
 
+describe('data proxy', () => {
+  const createRowsForm = () =>
+    useFormCore({
+      schema: z.object({
+        name: z.string(),
+        meta: z.object({ note: z.string() }).nullable(),
+        rows: z.array(z.object({ name: z.string() })),
+      }),
+      sourceValues: { name: 'n', meta: { note: 'x' }, rows: [{ name: 'a' }, { name: 'b' }] },
+      async submit() {},
+    })
+
+  test('a write that changes nothing is no edit', () => {
+    const form = createRowsForm()
+    const data = form.data
+    const rows = data.rows!
+
+    /* oxlint-disable no-self-assign -- the no-op write is what this test checks */
+    data.name = data.name
+    data.meta = data.meta
+    /* oxlint-enable no-self-assign */
+    rows[0] = rows[0]!
+    rows.length = 2
+    rows.push()
+    rows.splice(1, 0)
+    rows.sort((x, y) => (x?.name ?? '').localeCompare(y?.name ?? ''))
+    rows.fill({ name: 'a' }, 0, 1)
+    delete (data as Record<string, unknown>).missing
+    expect(form.isDirty).toBe(false)
+
+    data.name = 'm'
+    expect(form.isDirty).toBe(true)
+  })
+
+  test('a proxy keeps its node; writes after the node left the form are ignored', () => {
+    const form = createRowsForm()
+    const row = form.data.rows![0]!
+    const meta = form.data.meta!
+
+    form.data.rows!.shift()
+    form.data.meta = null
+    form.data.meta = { note: 'y' }
+
+    expect(row.name).toBe('a')
+    expect(meta.note).toBe('x')
+    row.name = 'late'
+    meta.note = 'late'
+    expect(form.data.rows!.map((r) => r?.name)).toEqual(['b'])
+    expect(form.data.meta?.note).toBe('y')
+  })
+
+  test('array read methods hand out writable item proxies', () => {
+    const form = createRowsForm()
+    const rows = form.data.rows!
+
+    rows.find((row) => row?.name === 'b')!.name = 'b2'
+    rows.filter((row) => row?.name === 'a')[0]!.name = 'a2'
+    expect(rows.map((row) => row?.name)).toEqual(['a2', 'b2'])
+
+    const arrays = new Set<unknown>()
+    rows.forEach((_row, _i, array) => arrays.add(array))
+    rows.reduce((_acc, _row, _i, array) => arrays.add(array), arrays)
+    expect([...arrays]).toEqual([rows])
+
+    expect(rows.includes(rows[1]!)).toBe(true)
+    expect(rows.indexOf(rows[1]!)).toBe(1)
+    expect([...rows.entries()].map(([i, row]) => `${i}:${row?.name}`)).toEqual(['0:a2', '1:b2'])
+    expect(rows.at(-1)).toBe(rows[1])
+  })
+
+  test('array read methods are tracked', () => {
+    const form = createRowsForm()
+    const rows = form.data.rows!
+    const joined = () => rows.map((row) => row?.name).join()
+    const seen = [joined()]
+    observe(joined, () => seen.push(joined()))
+
+    rows[1]!.name = 'b2'
+    rows.push({ name: 'c' })
+
+    expect(seen).toEqual(['a,b', 'a,b2', 'a,b2,c'])
+  })
+})
+
 describe('hooks', () => {
   test('beforeSubmit, afterSubmit', async () => {
     const beforeSubmitSpy = vi.fn()
