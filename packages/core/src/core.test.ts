@@ -102,6 +102,66 @@ describe('form', () => {
       expect(form.isChanged).toBe(false)
       expect(field.isChanged).toBe(false)
     })
+
+    test('stays true until every change is undone', () => {
+      const form = useFormCore({
+        schema: z.object({
+          rows: z.array(z.object({ name: z.string(), tags: z.array(z.string()) })),
+        }),
+        sourceValues: {
+          rows: [
+            { name: 'a', tags: ['x'] },
+            { name: 'b', tags: [] },
+          ],
+        },
+        async submit() {},
+      })
+      const root = form.fields.$use()
+      const rows = form.fields.rows.$use()
+      const seen: boolean[] = []
+      observe(
+        () => form.isChanged,
+        () => seen.push(form.isChanged),
+      )
+
+      form.data.rows![1]!.name = 'b2'
+      form.data.rows![0]!.tags!.push('y')
+      form.data.rows![1]!.name = 'b'
+      expect([form.isChanged, root.isChanged, rows.isChanged]).toEqual([true, true, true])
+
+      form.data.rows![0]!.tags!.pop()
+      expect([form.isChanged, root.isChanged, rows.isChanged]).toEqual([false, false, false])
+
+      form.data.rows![0]!.tags![0] = 'z'
+      expect([form.isChanged, root.isChanged, rows.isChanged]).toEqual([true, true, true])
+      expect(seen).toEqual([true, false, true])
+    })
+
+    test('nested keys count both ways, File by identity', () => {
+      const file = new File(['a'], 'a.txt')
+      const form = useFormCore({
+        schema: z.object({ meta: z.record(z.string(), z.unknown()) }),
+        sourceValues: { meta: { file, note: undefined } as Record<string, unknown> },
+        async submit() {},
+      })
+      const meta = form.fields.meta.$use()
+
+      delete form.data.meta!.note
+      expect([form.isChanged, meta.isChanged]).toEqual([true, true])
+
+      form.data.meta!.note = undefined
+      expect([form.isChanged, meta.isChanged]).toEqual([false, false])
+
+      form.data.meta!.extra = 1
+      expect([form.isChanged, meta.isChanged]).toEqual([true, true])
+
+      delete form.data.meta!.extra
+      form.data.meta!.file = new File(['a'], 'a.txt')
+      expect([form.isChanged, meta.isChanged]).toEqual([true, true])
+
+      form.data.meta!.file = file
+      expect([form.isChanged, meta.isChanged]).toEqual([false, false])
+    })
   })
 
   test('data', () => {

@@ -78,6 +78,83 @@ export function toPlain(value: unknown): unknown {
   return value
 }
 
+/** Whether `toPlain(stored)` and `plain` differ in this node alone: kind, keys, length or leaf value. */
+function nodeDiffers(stored: unknown, plain: unknown, subset: boolean): boolean {
+  if (isArray(stored)) return !isArray(plain) || stored.length !== plain.length
+  if (isPlainObject(stored)) {
+    if (!isPlainObject(plain)) return true
+    const keys = Object.keys(stored)
+    if (!subset && keys.length !== Object.keys(plain).length) return true
+    return keys.some((key) => !Object.hasOwn(plain, key))
+  }
+  return !isDeepEqual(stored, plain)
+}
+
+/** Path of the first node where stored and plain data differ, written to `path` deepest-first. */
+function findDifference(
+  stored: unknown,
+  plain: unknown,
+  subset: boolean,
+  path: PathSegment[],
+): boolean {
+  if (isArray(stored)) {
+    const entries = stored as Entry[]
+    const { length } = entries
+    if (!isArray(plain) || plain.length !== length) return true
+    for (let i = 0; i < length; i++) {
+      if (findDifference(entries[i]!.value, plain[i], false, path)) {
+        path.push(i)
+        return true
+      }
+    }
+    return false
+  }
+  if (isPlainObject(stored)) {
+    if (!isPlainObject(plain)) return true
+    const keys = Object.keys(stored)
+    if (!subset && keys.length !== Object.keys(plain).length) return true
+    for (const key of keys) {
+      if (!Object.hasOwn(plain, key)) return true
+      if (findDifference(stored[key], plain[key], false, path)) {
+        path.push(key)
+        return true
+      }
+    }
+    return false
+  }
+  return !Object.is(stored, plain) && !isDeepEqual(stored, plain)
+}
+
+/** Whether the nodes along `path` show a difference; false means unknown. */
+function differsAlong(stored: unknown, plain: unknown, subset: boolean, path: PathSegment[]) {
+  for (const segment of path) {
+    if (nodeDiffers(stored, plain, subset)) return true
+    subset = false
+    if (isArray(stored)) {
+      stored = (stored as Entry[])[segment as number]?.value
+      plain = (plain as unknown[])[segment as number]
+    } else if (isPlainObject(stored) && Object.hasOwn(stored, segment)) {
+      stored = stored[segment]
+      plain = (plain as Obj)[segment]
+    } else return false
+  }
+  return nodeDiffers(stored, plain, subset)
+}
+
+/** Tracked deep inequality of stored and plain data; while the last difference lasts it reads only that path. */
+export function createDiffer(stored: () => unknown, plain: () => unknown, subset = false) {
+  let last: PathSegment[] = []
+  return () => {
+    const s = stored()
+    const p = plain()
+    if (last.length > 0 && differsAlong(s, p, subset, last)) return true
+    const path: PathSegment[] = []
+    const differs = findDifference(s, p, subset, path)
+    last = path.reverse()
+    return differs
+  }
+}
+
 // Array.prototype.sort's default order, applied to values instead of indices
 function defaultCompare(a: unknown, b: unknown) {
   if (a === undefined) return b === undefined ? 0 : 1

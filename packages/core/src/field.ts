@@ -15,12 +15,12 @@ import type {
   FormSourceValues,
 } from './types'
 import { createMemo, createSignal, runWithOwner, untrack } from '@solidjs/signals'
-import { toPlain } from './data'
+import { createDiffer, toPlain } from './data'
 import { getSchemaMeta } from './json-schema'
 import { hasPendingStep, isWithin, locationId } from './location'
 import { commit, observe } from './reactive'
 import { extend } from './types'
-import { isDeepEqual, pathSegmentsToPathString } from './util'
+import { pathSegmentsToPathString } from './util'
 
 /** A validation issue, pinned to the item it was reported for. */
 export type LocatedIssue = { issue: StandardSchemaV1.Issue; location: Location; id: string }
@@ -77,12 +77,11 @@ export function createFormField<T, Schema extends FormSchema>(
     return (form.data.present(location(), current.node) ?? null) as T
   })
 
-  const plainValue = createMemo(() => toPlain(resolved()?.node) ?? null)
   // an item compares with its own source value, wherever it moved; new items have none
   const sourceValue = createMemo(
     () => toPlain(form.data.resolveIn(form.sourceStored(), location())?.node) ?? null,
   )
-  const isChanged = createMemo(() => !isDeepEqual(plainValue(), sourceValue()))
+  const isChanged = createMemo(createDiffer(() => resolved()?.node ?? null, sourceValue))
 
   // writable memo: back to 0 when the form becomes pristine, otherwise keeps counting
   const [updateCount, setUpdateCount] = createSignal<number>((prev) =>

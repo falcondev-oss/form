@@ -23,13 +23,13 @@ import {
 import { createHooks } from 'hookable'
 import { klona } from 'klona/full'
 import { hasAtLeast, isArray } from 'remeda'
-import { createFormStore, toPlain } from './data'
+import { createDiffer, createFormStore, toPlain } from './data'
 import { assignDescriptors, createFormField } from './field'
 import { toJsonSchema } from './json-schema'
 import { locationId } from './location'
 import { commit, observe, toValue } from './reactive'
 import { extend } from './types'
-import { debugLog, hasSubObject } from './util'
+import { debugLog } from './util'
 
 export function useFormCore<
   const Schema extends FormSchema,
@@ -80,8 +80,13 @@ function createForm<
   const [sourceStored, setSourceStored] = createSignal<unknown>(data.snapshotStored())
   const formData = data.root() as Data
 
+  // the source may have properties the data does not
   const isChanged = createMemo(
-    () => !hasSubObject(sourceValues() ?? {}, toPlain(data.state) as object),
+    createDiffer(
+      () => data.state,
+      () => sourceValues() ?? {},
+      true,
+    ),
   )
   // issue paths follow their items: they show where the item is now
   const errors = createMemo(() => {
