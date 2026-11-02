@@ -1,6 +1,7 @@
 import { effect, ref, watch } from '@vue/reactivity'
 import { until } from '@vueuse/core'
 import { type } from 'arktype'
+import { Temporal } from 'temporal-polyfill'
 import { describe, expect, expectTypeOf, test, vi } from 'vitest'
 import z from 'zod'
 import { useFormCore } from './core'
@@ -69,6 +70,33 @@ describe('form', () => {
 
       expect(form.isChanged).toBe(true)
       expect(field.isChanged).toBe(true)
+    })
+
+    test('replaced Temporal', () => {
+      const form = useFormCore({
+        schema: z.object({
+          date: z.instanceof(Temporal.PlainDate),
+        }),
+        sourceValues: {
+          date: Temporal.PlainDate.from('2026-11-02'),
+        },
+        async submit() {},
+      })
+      const field = form.fields.date.$use()
+
+      expect(form.data.date?.toString()).toBe('2026-11-02')
+      expect(form.isChanged).toBe(false)
+
+      field.handleChange(Temporal.PlainDate.from('2026-11-03'))
+
+      expect(form.data.date?.toString()).toBe('2026-11-03')
+      expect(form.isChanged).toBe(true)
+      expect(field.isChanged).toBe(true)
+
+      field.handleChange(Temporal.PlainDate.from('2026-11-02'))
+
+      expect(form.isChanged).toBe(false)
+      expect(field.isChanged).toBe(false)
     })
   })
 
