@@ -45,12 +45,21 @@ export const getProperty = ((
   return getProperty_(...args)
 }) as typeof getProperty_
 
-// remeda compares class instances by own keys, so any two `File`s would be equal
+function isTemporal(value: unknown): value is { toString: () => string } {
+  return Object.prototype.toString.call(value).startsWith('[object Temporal.')
+}
+
+// remeda compares class instances by own keys, so any two `File`s or `Temporal`s would be equal
 export function isDeepEqual(a: unknown, b: unknown): boolean {
   if (isArray(a) && isArray(b))
     return a.length === b.length && a.every((value, i) => isDeepEqual(value, b[i]))
   if (isPlainObject(a) && isPlainObject(b)) return hasSubObject(a, b) && hasSubObject(b, a)
   if (a instanceof Blob || b instanceof Blob) return a === b
+  if (isTemporal(a) || isTemporal(b))
+    return (
+      Object.prototype.toString.call(a) === Object.prototype.toString.call(b) &&
+      String(a) === String(b)
+    )
   return isDeepEqual_(a, b)
 }
 
