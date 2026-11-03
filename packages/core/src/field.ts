@@ -74,7 +74,7 @@ export function createFormField<T, Schema extends FormSchema>(
   const value = createMemo<T>((prev) => {
     const current = resolved()
     if (!current) return (prev ?? null) as T
-    return (form.data.present(location(), current.node) ?? null) as T
+    return (form.data.present(current.node) ?? null) as T
   })
 
   // an item compares with its own source value, wherever it moved; new items have none
@@ -104,16 +104,19 @@ export function createFormField<T, Schema extends FormSchema>(
     form.jsonSchema ? getSchemaMeta(form.jsonSchema, form.data.root() as object, path()) : {},
   )
 
-  async function validate() {
-    const formIssues = await form.validate()
+  /** Shows this field's share of a form validation; call inside `commit()`. */
+  function applyIssues(formIssues: LocatedIssue[] | undefined) {
     if (!formIssues) {
-      commit(() => {
-        form.setIssues(undefined)
-        setIssues(undefined)
-      })
+      form.setIssues(undefined)
+      setIssues(undefined)
       return
     }
-    commit(() => setIssues(untrack(() => formIssues.filter(owns))))
+    setIssues(untrack(() => formIssues.filter(owns)))
+  }
+
+  async function validate() {
+    const formIssues = await form.validate()
+    commit(() => applyIssues(formIssues))
   }
 
   function blocked(action: string) {
@@ -247,6 +250,7 @@ export function createFormField<T, Schema extends FormSchema>(
     location,
     segments,
     validate,
+    applyIssues,
     translated,
   }
 

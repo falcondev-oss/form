@@ -10,8 +10,6 @@ import {
   untrack,
 } from '@solidjs/signals'
 import { isArray, isPlainObject } from 'remeda'
-import { hasPendingStep, locationId } from './location'
-import { commit } from './reactive'
 import { clonePlain, isDeepEqual } from './util'
 
 export type PathSegment = string | number
@@ -27,10 +25,6 @@ export type ItemKey = string | ((item: unknown) => unknown)
 export type FormStoreOptions = {
   owner: Owner
   itemKey: ItemKey | undefined
-  /** Inside the write's batch, so state derived from it updates together. */
-  onWrite: (id: string) => void
-  /** After the write is visible. */
-  afterWrite: (id: string) => void
 }
 
 const ARRAY_MUTATIONS = new Set([
@@ -155,15 +149,6 @@ export function createDiffer(stored: () => unknown, plain: () => unknown, subset
   }
 }
 
-// Array.prototype.sort's default order, applied to values instead of indices
-function defaultCompare(a: unknown, b: unknown) {
-  if (a === undefined) return b === undefined ? 0 : 1
-  if (b === undefined) return -1
-  // oxlint-disable-next-line typescript/no-base-to-string -- matches the native default sort
-  const [sa, sb] = [String(a), String(b)]
-  return sa < sb ? -1 : sa > sb ? 1 : 0
-}
-
 export type FormStore = ReturnType<typeof createFormStore>
 
 export function createFormStore(initial: object, opts: FormStoreOptions) {
@@ -176,45 +161,82 @@ export function createFormStore(initial: object, opts: FormStoreOptions) {
   }
 
   /**
-   * Plain data → stored form. Array items reuse the key of the `previous`
-   * item they match: by item id, otherwise (no id on either side) by position.
-   * Always builds new containers, so the caller's objects never enter the store.
+   * Plain data → stored form. An array item keeps the key of the `previous`
+   * item it matches: the same object (`identity`, from a draft), else the same
+   * item id, else the same primitive value, else (no id on either side) the
+   * same position. Always builds new containers, so the caller's objects never
+   * enter the store.
    */
-  function toStored(value: unknown, previous?: unknown): unknown {
+  function toStored(
+    value: unknown,
+    previous?: unknown,
+    identity?: WeakMap<object, Entry>,
+  ): unknown {
     const proxied = isObject(value) ? proxyNodes.get(value) : undefined
     if (proxied) value = untrack(() => toPlain(proxied))
 
     if (isArray(value)) {
-      const matched = matchEntries(isArray(previous) ? (previous as Entry[]) : [], value)
+      const matched = matchEntries(isArray(previous) ? (previous as Entry[]) : [], value, identity)
       return value.map((item, i) => ({
         key: matched[i]?.key ?? newKey(),
-        value: toStored(item, matched[i]?.value),
+        value: toStored(item, matched[i]?.value, identity),
       }))
     }
     if (isPlainObject(value)) {
       const prev = isPlainObject(previous) ? previous : undefined
-      return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, toStored(v, prev?.[k])]))
+      return Object.fromEntries(
+        Object.entries(value).map(([k, v]) => [k, toStored(v, prev?.[k], identity)]),
+      )
     }
     return value
   }
 
-  function matchEntries(previous: Entry[], next: readonly unknown[]) {
+  function matchEntries(
+    previous: Entry[],
+    next: readonly unknown[],
+    identity?: WeakMap<object, Entry>,
+  ) {
+    const used = new Set<string>()
+    const take = (entry: Entry | undefined) => {
+      if (!entry || used.has(entry.key)) return
+      used.add(entry.key)
+      return entry
+    }
+
+    const matched = next.map((item) => (isObject(item) ? take(identity?.get(item)) : undefined))
+
     const previousIds = previous.map((entry) => itemId(toPlain(entry.value)) ?? undefined)
     const byId = new Map<unknown, Entry>()
     for (const [i, entry] of previous.entries()) {
       const id = previousIds[i]
       if (id !== undefined && !byId.has(id)) byId.set(id, entry)
     }
-
-    const used = new Set<Entry>()
-    return next.map((item, i): Entry | undefined => {
+    for (const [i, item] of next.entries()) {
+      if (matched[i] || identity?.has(item as object)) continue
       const id = itemId(item) ?? undefined
-      const entry =
-        id === undefined ? (previousIds[i] === undefined ? previous[i] : undefined) : byId.get(id)
-      if (!entry || used.has(entry)) return undefined
-      used.add(entry)
-      return entry
-    })
+      if (id !== undefined) matched[i] = take(byId.get(id))
+      else if (!isObject(item))
+        matched[i] = take(previous.find((e) => !used.has(e.key) && Object.is(e.value, item)))
+    }
+    for (const [i, item] of next.entries()) {
+      if (matched[i] || identity?.has(item as object)) continue
+      if ((itemId(item) ?? undefined) === undefined && previousIds[i] === undefined)
+        matched[i] = take(previous[i])
+    }
+    return matched
+  }
+
+  /** Stored form → plain draft; `identity` records each array item's entry. */
+  function toDraft(value: unknown, identity: WeakMap<object, Entry>): unknown {
+    if (isArray(value))
+      return (value as Entry[]).map((entry) => {
+        const item = toDraft(entry.value, identity)
+        if (isObject(item)) identity.set(item, entry)
+        return item
+      })
+    if (isPlainObject(value))
+      return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, toDraft(v, identity)]))
+    return value
   }
 
   const [state, setState] = createStore<Obj>(toStored(initial) as Obj)
@@ -272,12 +294,11 @@ export function createFormStore(initial: object, opts: FormStoreOptions) {
   }
 
   const resolve = (location: Location) => resolveIn(state, location)
-  const peek = (location: Location) => untrack(() => resolve(location))
 
-  /** Stored node → what users see: objects and arrays as writable proxies, one per node. */
-  function present(location: Location, node: unknown): unknown {
+  /** Stored node → what users see: objects and arrays as readonly proxies, one per node. */
+  function present(node: unknown): unknown {
     if (!isContainer(node)) return node
-    return proxies.get(node) ?? createDataProxy(node as Obj, location)
+    return proxies.get(node) ?? createDataProxy(node as Obj)
   }
 
   /** The container at `segments`, created on the way; `next` is the segment that will be read from it. */
@@ -343,170 +364,42 @@ export function createFormStore(initial: object, opts: FormStoreOptions) {
     return node
   }
 
-  function writeThrough(id: string, apply: () => void) {
-    commit(() => {
-      apply()
-      opts.onWrite(id)
-    })
-    opts.afterWrite(id)
+  /**
+   * Runs `recipe` on a plain copy of the data and stores the result. Items keep
+   * their keys by object identity, so moved items stay bound to their fields.
+   * Returns whether anything changed; call inside `commit()`.
+   */
+  function update(recipe: (draft: Obj) => void) {
+    const before = snapshotStored()
+    const identity = new WeakMap<object, Entry>()
+    const draft = toDraft(before, identity) as Obj
+    recipe(draft)
+    const after = toStored(draft, before, identity)
+    if (isDeepEqual(after, before)) return false
+    assignStored([], after)
+    return true
+  }
+
+  const snapshotStored = () => clonePlain(untrack(() => snapshot(state))) as Obj
+
+  function warnReadonly(): true {
+    console.warn('useForm:', 'form.data is readonly, use form.setData() or field.handleChange()')
+    return true
   }
 
   /**
-   * Applies an array method to the stored entries. `expected` is the stored
-   * array a data proxy is bound to: if the location holds another array by now,
-   * the proxy is stale and the call changes nothing.
+   * A readonly view of one stored node that hides the array entries. Reads go
+   * straight to the node (one tracked store read each). Like a plain object
+   * reference, the view keeps showing its node after the node leaves the form.
    */
-  function mutateArray(
-    location: Location,
-    method: string,
-    args: unknown[],
-    expected?: object,
-  ): unknown {
-    const resolved = peek(location)
-    if (expected && resolved?.node !== expected) return undefined
-    if (!resolved || !isArray(resolved.node))
-      throw new TypeError(`useForm: ${locationId(location)} is not an array`)
-    const { segments, node } = resolved
-    const before = untrack(() => toPlain(node)) as unknown[]
-    const after = [...before]
-    const toEntry = (item: unknown): Entry => ({
-      key: newKey(),
-      value: untrack(() => toStored(item)),
-    })
-
-    let result: unknown
-    let changed: boolean
-    let mutate: (entries: Entry[]) => void
-    switch (method) {
-      case 'push':
-      case 'unshift': {
-        result = after[method](...args)
-        const added = args.map(toEntry)
-        changed = added.length > 0
-        mutate = (entries) => entries[method](...added)
-        break
-      }
-      case 'pop':
-      case 'shift':
-        result = after[method]()
-        changed = before.length > 0
-        mutate = (entries) => void entries[method]()
-        break
-      case 'splice': {
-        const removed = (after.splice as (...a: unknown[]) => unknown[])(...args)
-        const added = args.slice(2).map(toEntry)
-        result = removed
-        changed = removed.length > 0 || added.length > 0
-        mutate = (entries) =>
-          void (entries.splice as (...a: unknown[]) => Entry[])(...args.slice(0, 2), ...added)
-        break
-      }
-      case 'sort':
-      case 'reverse': {
-        const order = before.map((_, i) => i)
-        if (method === 'reverse') order.reverse()
-        else {
-          const compare =
-            (args[0] as ((a: unknown, b: unknown) => number) | undefined) ?? defaultCompare
-          order.sort((a, b) => compare(before[a], before[b]))
-        }
-        changed = order.some((from, i) => from !== i)
-        const entries = clonePlain(untrack(() => snapshot(node))) as Entry[]
-        mutate = (draftEntries) =>
-          reconcile(
-            order.map((i) => entries[i]!),
-            'key',
-          )(draftEntries)
-        break
-      }
-      default: {
-        // fill / copyWithin: values change in place, items keep their keys
-        ;(after as unknown as Record<string, (...a: unknown[]) => unknown>)[method]!(...args)
-        const updates = untrack(() =>
-          after.flatMap((value, i) =>
-            isDeepEqual(value, before[i])
-              ? []
-              : [[i, toStored(value, (node as Entry[])[i]?.value)] as const],
-          ),
-        )
-        changed = updates.length > 0
-        mutate = (entries) => {
-          for (const [i, stored] of updates) entries[i]!.value = stored
-        }
-      }
-    }
-
-    // like Vue's `hasChanged()`: a call that changes nothing is no edit
-    if (changed)
-      writeThrough(locationId(location), () =>
-        setState((draft) => mutate(containerAt(draft, segments) as unknown as Entry[])),
-      )
-    return ['sort', 'reverse', 'fill', 'copyWithin'].includes(method)
-      ? present(location, node)
-      : result
-  }
-
-  /**
-   * A writable view of one stored node, in the spirit of Vue's `reactive()`:
-   * reads go straight to the bound node (one tracked store read each), and the
-   * location (by item key) is only resolved to a path when writing. Like a plain
-   * object reference, the proxy keeps showing its node after the node leaves
-   * the form; writes through such a stale proxy are ignored.
-   */
-  function createDataProxy(node: Obj, location: Location): object {
-    // a position with no item yet binds to the item that sits there now
-    if (hasPendingStep(location))
-      location = untrack(() => locateIn(state, resolve(location)?.segments ?? []))
-
+  function createDataProxy(node: Obj): object {
     const entries = isArray(node) ? (node as unknown as Entry[]) : undefined
     const entryAt = (key: PropertyKey) =>
       entries && isIndex(key) ? entries[Number(key)] : undefined
-
-    // the child's location is only built for a node that has no proxy yet
-    const child = (value: unknown, step: () => Step) =>
-      isContainer(value)
-        ? (proxies.get(value) ?? createDataProxy(value as Obj, [...location, step()]))
-        : value
-    const item = (entry: Entry) => child(entry.value, () => ({ item: entry.key }))
     const items = () => {
       const list: unknown[] = Array.from({ length: entries!.length })
-      for (const [i, entry] of entries!.entries()) list[i] = item(entry)
+      for (const [i, entry] of entries!.entries()) list[i] = present(entry.value)
       return list
-    }
-    const childStep = (key: string): Step => {
-      if (!entries) return { prop: key }
-      const entry = entryAt(key)
-      return entry ? { item: entry.key } : { index: Number(key) }
-    }
-
-    /** Resolves the bound location for a write; undefined when the proxy is stale. */
-    function writable() {
-      const resolved = peek(location)
-      return resolved?.node === node ? resolved : undefined
-    }
-
-    function setChild(key: string, value: unknown) {
-      if (entries && key === 'length') {
-        const length = Number(value)
-        const current = untrack(() => entries.length)
-        if (length < current) mutateArray(location, 'splice', [length], node)
-        else if (length > current)
-          mutateArray(location, 'push', Array.from({ length: length - current }), node)
-        return
-      }
-
-      const current = untrack(() => (entries ? entryAt(key)?.value : node[key]))
-      const exists = untrack(() => (entries ? !!entryAt(key) : key in node))
-      // like Vue's `hasChanged()`: assigning the current value is no edit
-      if (exists && (Object.is(current, value) || proxyNodes.get(value as object) === current))
-        return
-
-      const resolved = writable()
-      if (!resolved) return
-      const segment = entries ? Number(key) : key
-      writeThrough(locationId([...location, childStep(key)]), () =>
-        write([...resolved.segments, segment], value),
-      )
     }
 
     // the target is a plain stand-in: invariant checks against a store proxy would cost a trap per read
@@ -514,16 +407,15 @@ export function createFormStore(initial: object, opts: FormStoreOptions) {
       get(_target, key) {
         if (!entries) {
           if (typeof key === 'symbol') return Reflect.get(node, key)
-          return child(Reflect.get(node, key), () => ({ prop: key }))
+          return present(Reflect.get(node, key))
         }
 
         if (key === 'length') return entries.length
         if (isIndex(key)) {
           const entry = entries[Number(key)]
-          return entry && item(entry)
+          return entry && present(entry.value)
         }
-        if (typeof key === 'string' && ARRAY_MUTATIONS.has(key))
-          return (...args: unknown[]) => mutateArray(location, key, args, node)
+        if (typeof key === 'string' && ARRAY_MUTATIONS.has(key)) return warnReadonly
 
         // read methods run on a plain list of the items, like Vue's array instrumentation
         const method = (Array.prototype as unknown as Record<PropertyKey, unknown>)[key]
@@ -544,36 +436,9 @@ export function createFormStore(initial: object, opts: FormStoreOptions) {
           return method.apply(items(), args) as unknown
         }
       },
-      set(_target, key, value) {
-        if (typeof key === 'symbol') return false
-        setChild(key, value)
-        return true
-      },
-      defineProperty(_target, key, descriptor) {
-        if (typeof key === 'symbol' || !('value' in descriptor)) return false
-        setChild(key, descriptor.value)
-        return true
-      },
-      deleteProperty(_target, key) {
-        if (typeof key === 'symbol') return false
-        const exists = untrack(() =>
-          entries ? entryAt(key)?.value !== undefined : Object.hasOwn(node, key),
-        )
-        const resolved = exists ? writable() : undefined
-        if (!resolved) return true
-
-        writeThrough(locationId([...location, childStep(key)]), () =>
-          setState((draft) => {
-            const container = containerAt(draft, resolved.segments)
-            // like `delete array[i]`: the slot stays, its value goes
-            if (entries) {
-              const entry = (container as unknown as Entry[])[Number(key)]
-              if (entry) entry.value = undefined
-            } else delete container[key]
-          }),
-        )
-        return true
-      },
+      set: warnReadonly,
+      defineProperty: warnReadonly,
+      deleteProperty: warnReadonly,
       has(_target, key) {
         if (entries) return key === 'length' || !!entryAt(key) || key in Array.prototype
         return Reflect.has(node, key)
@@ -591,14 +456,19 @@ export function createFormStore(initial: object, opts: FormStoreOptions) {
         if (entries) {
           const entry = entryAt(key)
           if (!entry) return undefined
-          return { value: item(entry), writable: true, enumerable: true, configurable: true }
+          return {
+            value: present(entry.value),
+            writable: false,
+            enumerable: true,
+            configurable: true,
+          }
         }
 
         const descriptor = Reflect.getOwnPropertyDescriptor(node, key)
         if (!descriptor) return undefined
         return {
-          value: child(Reflect.get(node, key), () => ({ prop: key })),
-          writable: true,
+          value: present(Reflect.get(node, key)),
+          writable: false,
           enumerable: descriptor.enumerable,
           configurable: true,
         }
@@ -621,7 +491,7 @@ export function createFormStore(initial: object, opts: FormStoreOptions) {
     /** Tracked positional read; negative indices count from the end. */
     readAt,
     present,
-    root: () => present([], state),
+    root: () => present(state),
     /** Plain data → stored form, matching items against the current data. */
     prepare: (value: unknown) => untrack(() => toStored(value, state)),
     /** Writes plain data; call inside `commit()`. */
@@ -629,8 +499,8 @@ export function createFormStore(initial: object, opts: FormStoreOptions) {
     /** Writes an already stored value (keys kept); call inside `commit()`. */
     writeStored: (segments: readonly PathSegment[], stored: unknown) =>
       assignStored(segments, clonePlain(stored)),
-    mutateArray,
+    update,
     /** A detached copy of the stored tree. */
-    snapshotStored: () => clonePlain(untrack(() => snapshot(state))) as Obj,
+    snapshotStored,
   }
 }

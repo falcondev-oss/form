@@ -124,15 +124,25 @@ describe('form', () => {
         () => seen.push(form.isChanged),
       )
 
-      form.data.rows![1]!.name = 'b2'
-      form.data.rows![0]!.tags!.push('y')
-      form.data.rows![1]!.name = 'b'
+      form.setData((d) => {
+        d.rows![1]!.name = 'b2'
+      })
+      form.setData((d) => {
+        d.rows![0]!.tags!.push('y')
+      })
+      form.setData((d) => {
+        d.rows![1]!.name = 'b'
+      })
       expect([form.isChanged, root.isChanged, rows.isChanged]).toEqual([true, true, true])
 
-      form.data.rows![0]!.tags!.pop()
+      form.setData((d) => {
+        d.rows![0]!.tags!.pop()
+      })
       expect([form.isChanged, root.isChanged, rows.isChanged]).toEqual([false, false, false])
 
-      form.data.rows![0]!.tags![0] = 'z'
+      form.setData((d) => {
+        d.rows![0]!.tags![0] = 'z'
+      })
       expect([form.isChanged, root.isChanged, rows.isChanged]).toEqual([true, true, true])
       expect(seen).toEqual([true, false, true])
     })
@@ -146,20 +156,30 @@ describe('form', () => {
       })
       const meta = form.fields.meta.$use()
 
-      delete form.data.meta!.note
+      form.setData((d) => {
+        delete d.meta!.note
+      })
       expect([form.isChanged, meta.isChanged]).toEqual([true, true])
 
-      form.data.meta!.note = undefined
+      form.setData((d) => {
+        d.meta!.note = undefined
+      })
       expect([form.isChanged, meta.isChanged]).toEqual([false, false])
 
-      form.data.meta!.extra = 1
+      form.setData((d) => {
+        d.meta!.extra = 1
+      })
       expect([form.isChanged, meta.isChanged]).toEqual([true, true])
 
-      delete form.data.meta!.extra
-      form.data.meta!.file = new File(['a'], 'a.txt')
+      form.setData((d) => {
+        delete d.meta!.extra
+        d.meta!.file = new File(['a'], 'a.txt')
+      })
       expect([form.isChanged, meta.isChanged]).toEqual([true, true])
 
-      form.data.meta!.file = file
+      form.setData((d) => {
+        d.meta!.file = file
+      })
       expect([form.isChanged, meta.isChanged]).toEqual([false, false])
     })
   })
@@ -201,7 +221,9 @@ describe('form', () => {
         async submit() {},
       })
 
-      form.data.name = 'Jane Doe'
+      form.setData((d) => {
+        d.name = 'Jane Doe'
+      })
       expect(form.data.name).toBe('Jane Doe')
 
       setSourceValues({
@@ -228,7 +250,9 @@ describe('form', () => {
       })
 
       // make form dirty
-      form.data.name = 'Jane Doe'
+      form.setData((d) => {
+        d.name = 'Jane Doe'
+      })
       expect(form.data.name).toBe('Jane Doe')
 
       await form.submit()
@@ -247,7 +271,9 @@ describe('form', () => {
       async submit() {},
     })
 
-    form.data.name = 'Jane Doe'
+    form.setData((d) => {
+      d.name = 'Jane Doe'
+    })
     expect(form.isDirty).toBe(true)
 
     await form.submit()
@@ -370,7 +396,9 @@ describe('field', () => {
     expect(ageField.errors).toBeUndefined()
     expect(form.errors?.length).toBeDefined()
 
-    form.data.array![0]!.name = 'John'
+    form.setData((d) => {
+      d.array![0]!.name = 'John'
+    })
     await Promise.resolve()
     expect(nestedField.errors).toBeUndefined()
     expect(ageField.errors).toBeUndefined()
@@ -495,7 +523,9 @@ describe('field', () => {
       } | null>()
     }
 
-    if (form.data) form.data.union = { type: 'B', value: 42 }
+    form.setData((d) => {
+      d.union = { type: 'B', value: 42 }
+    })
     expect(unionField.$field.$use().value).toEqual({ type: 'B', value: 42 })
     if (unionField.type === 'B') {
       expectTypeOf(unionField.$field.$use().value).toEqualTypeOf<{
@@ -522,9 +552,13 @@ describe('field', () => {
       () => seen.push(root.kind),
     )
 
-    form.data.kind = 'b'
+    form.setData((d) => {
+      d.kind = 'b'
+    })
     form.reset()
-    form.data.kind = 'b'
+    form.setData((d) => {
+      d.kind = 'b'
+    })
 
     expect(seen).toEqual(['a', 'b', 'a', 'b'])
     expect(form.fields.$use().isChanged).toBe(true)
@@ -610,7 +644,9 @@ describe('field', () => {
       expect(arrayField.value).toBe('one')
       expect(form.data['foo.bar.array']?.[0]).toEqual('one')
 
-      form.data['foo.bar.array']?.unshift('zero')
+      form.setData((d) => {
+        d['foo.bar.array']?.unshift('zero')
+      })
 
       expect(form.data['foo.bar.array']?.[0]).toEqual('zero')
       // the field stays with its item
@@ -634,7 +670,9 @@ describe('field', () => {
       expect(arrayField.value).toBe('one')
       expect(form.data.array?.[0]).toEqual('one')
 
-      form.data.array?.unshift('zero')
+      form.setData((d) => {
+        d.array?.unshift('zero')
+      })
 
       expect(form.data.array?.[0]).toEqual('zero')
       // the field stays with its item, the accessor resolves the position again
@@ -689,14 +727,15 @@ describe('field', () => {
       '()',
     )
 
+    // nested values are readonly too
     form.fields.$use().value.a = 'new value'
-    expect(form.data.a).toBe('new value')
     form.fields.$use().value.obj!.b = 456
-    expect(form.data.obj?.b).toBe(456)
-
-    // pushing to array is allowed
     form.fields.array.$use().value?.push('three')
-    expect(form.data.array).toEqual(['one', 'two', 'three'])
+    expect(consoleWarnSpy).toHaveBeenLastCalledWith(
+      'useForm:',
+      'form.data is readonly, use form.setData() or field.handleChange()',
+    )
+    expect(form.data).toEqual({ a: 'initial', array: ['one', 'two'], obj: { b: 123 } })
   })
 })
 
@@ -732,7 +771,9 @@ describe('solid', () => {
     const seen = [describeUnion()]
     observe(describeUnion, () => seen.push(describeUnion()))
 
-    form.data.union = { type: 'B', value: 2 }
+    form.setData((d) => {
+      d.union = { type: 'B', value: 2 }
+    })
     if (union.type === 'B') union.$field.value.$use().handleChange(3)
     form.fields.union.$use().handleChange(null)
 
@@ -749,20 +790,28 @@ describe('solid', () => {
     const names = () => form.data.items?.map((item) => item?.name)
     const [keyA, keyB, keyC] = [keyAt(0), keyAt(1), keyAt(2)]
 
-    form.data.items!.unshift({ name: 'z' })
+    form.setData((d) => {
+      d.items!.unshift({ name: 'z' })
+    })
     expect(names()).toEqual(['z', 'a', 'b', 'c'])
     expect(keyAt(1)).toBe(keyA)
 
-    form.data.items!.reverse()
+    form.setData((d) => {
+      d.items!.reverse()
+    })
     expect(names()).toEqual(['c', 'b', 'a', 'z'])
     expect(keyAt(0)).toBe(keyC)
 
-    form.data.items!.sort((x, y) => (x?.name ?? '').localeCompare(y?.name ?? ''))
+    form.setData((d) => {
+      d.items!.sort((x, y) => (x?.name ?? '').localeCompare(y?.name ?? ''))
+    })
     expect(names()).toEqual(['a', 'b', 'c', 'z'])
     expect([keyAt(0), keyAt(1), keyAt(2)]).toEqual([keyA, keyB, keyC])
 
     // keyB was created at index 1, but its item sits at index 1 only by coincidence: move it first
-    form.data.items!.splice(0, 1)
+    form.setData((d) => {
+      d.items!.splice(0, 1)
+    })
     expect(names()).toEqual(['b', 'c', 'z'])
     form.fields.items.delete(keyB)
     expect(names()).toEqual(['c', 'z'])
@@ -781,8 +830,12 @@ describe('solid', () => {
     const count = () => [...form.fields.tags].length
     observe(count, () => lengths.push(count()))
 
-    form.data.tags!.push('b')
-    form.fields.tags.$use().value!.push('c')
+    form.setData((d) => {
+      d.tags!.push('b')
+    })
+    form.setData((d) => {
+      d.tags!.push('c')
+    })
     form.fields.tags.delete(form.fields.tags.at(0).$use().key)
 
     expect(lengths).toEqual([2, 3, 2])
@@ -820,7 +873,9 @@ describe('solid', () => {
       async submit() {},
     })
     const first = form.fields.tags.at(0).$use()
-    form.data.tags!.unshift('z')
+    form.setData((d) => {
+      d.tags!.unshift('z')
+    })
 
     const moved = createRoot(() => form.fields.tags.at(1).$use())
 
@@ -841,7 +896,9 @@ describe('solid', () => {
       () => form.fields.b.$use().handleChange(`${form.data.a}!`),
     )
 
-    form.data.a = 'x'
+    form.setData((d) => {
+      d.a = 'x'
+    })
 
     expect(form.data.b).toBe('x!')
     expect(warn).not.toHaveBeenCalled()
@@ -867,7 +924,9 @@ describe('item identity', () => {
     expect(invalid.errors).toHaveLength(1)
     expect(form.errors?.[0]?.path).toEqual(['rows', 1, 'name'])
 
-    form.data.rows!.unshift({ name: 'new' })
+    form.setData((d) => {
+      d.rows!.unshift({ name: 'new' })
+    })
 
     expect(invalid.errors).toHaveLength(1)
     expect(invalid.path).toBe('rows[2].name')
@@ -884,7 +943,9 @@ describe('item identity', () => {
     const first = form.fields.rows.at(0).name.$use()
     const warn = vi.spyOn(console, 'warn').mockClear()
 
-    form.data.rows!.shift()
+    form.setData((d) => {
+      d.rows!.shift()
+    })
 
     expect(first.isDetached).toBe(true)
     expect(first.value).toBe('a') // last value
@@ -945,10 +1006,12 @@ describe('item identity', () => {
     })
     const row = form.fields.rows.at(0).$use()
 
-    form.data.rows = [
-      { uuid: 'u2', name: 'b' },
-      { uuid: 'u1', name: 'a2' },
-    ]
+    form.setData((d) => {
+      d.rows = [
+        { uuid: 'u2', name: 'b' },
+        { uuid: 'u1', name: 'a2' },
+      ]
+    })
 
     expect(row.path).toBe('rows[1]')
     expect(row.value?.name).toBe('a2')
@@ -964,7 +1027,9 @@ describe('item identity', () => {
     flush()
     expect(first.value).toBe('a')
 
-    form.data!.rows!.reverse()
+    form.setData((d) => {
+      d.rows!.reverse()
+    })
     expect(first.value).toBe('a')
     expect(first.path).toBe('rows[1].name')
   })
@@ -978,7 +1043,9 @@ describe('item identity', () => {
     const last = form.fields.tags.at(-1)
 
     expect(last.$use().value).toBe('b')
-    form.data.tags!.push('c')
+    form.setData((d) => {
+      d.tags!.push('c')
+    })
     expect(last.$use().value).toBe('c')
   })
 
@@ -990,10 +1057,41 @@ describe('item identity', () => {
     })
     const row = form.data.rows![0]!
 
-    form.data.rows!.unshift({ name: 'z' })
-    row.name = 'a2'
+    form.setData((d) => {
+      d.rows!.unshift({ name: 'z' })
+    })
+    form.fields.rows.at(1).name.$use().handleChange('a2')
 
+    expect(row.name).toBe('a2')
     expect(names(form)).toEqual(['z', 'a2'])
+  })
+
+  test('setData keeps fields with items it moves between and within arrays', () => {
+    const form = useFormCore({
+      schema: z.object({
+        rows: z.array(z.object({ name: z.string() })),
+        done: z.array(z.object({ name: z.string() })),
+        tags: z.array(z.string()),
+      }),
+      sourceValues: { rows: [{ name: 'a' }, { name: 'b' }], done: [], tags: ['x', 'y'] },
+      async submit() {},
+    })
+    const b = form.fields.rows.at(1).name.$use()
+    const x = form.fields.tags.at(0).$use()
+    const y = form.fields.tags.at(1).$use()
+
+    form.setData((d) => {
+      d.rows = d.rows!.filter((row) => row!.name !== 'a')
+      d.tags!.unshift('w')
+    })
+    form.setData((d) => {
+      d.tags![2] = 'y2'
+    })
+
+    expect(b.path).toBe('rows[0].name')
+    expect(x.path).toBe('tags[1]')
+    // a primitive replaced in place keeps its slot's field
+    expect([y.path, y.value]).toEqual(['tags[2]', 'y2'])
   })
 
   test('isChanged and reset compare an item with its own source value', () => {
@@ -1005,11 +1103,15 @@ describe('item identity', () => {
     const rows = form.fields.rows.$use()
     const a = form.fields.rows.at(0).$use()
 
-    form.data.rows!.reverse()
+    form.setData((d) => {
+      d.rows!.reverse()
+    })
     expect(a.isChanged).toBe(false)
     expect(rows.isChanged).toBe(true)
 
-    form.data.rows!.push({ name: 'c' })
+    form.setData((d) => {
+      d.rows!.push({ name: 'c' })
+    })
     const added = form.fields.rows.at(2).$use()
     expect(added.isChanged).toBe(true)
 
@@ -1032,51 +1134,100 @@ describe('data proxy', () => {
       async submit() {},
     })
 
-  test('a write that changes nothing is no edit', () => {
+  test('form.data is readonly', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    warn.mockClear()
     const form = createRowsForm()
     const data = form.data
     const rows = data.rows!
 
-    /* oxlint-disable no-self-assign -- the no-op write is what this test checks */
-    data.name = data.name
-    data.meta = data.meta
-    /* oxlint-enable no-self-assign */
-    rows[0] = rows[0]!
-    rows.length = 2
-    rows.push()
-    rows.splice(1, 0)
-    rows.sort((x, y) => (x?.name ?? '').localeCompare(y?.name ?? ''))
-    rows.fill({ name: 'a' }, 0, 1)
-    delete (data as Record<string, unknown>).missing
+    // @ts-expect-error form.data is readonly
+    data.name = 'm'
+    // @ts-expect-error form.data is readonly
+    rows[0]!.name = 'x'
+    // @ts-expect-error form.data is readonly
+    rows.push({ name: 'c' })
+    delete (data as Record<string, unknown>).meta
+
+    expect(form.data).toEqual({
+      name: 'n',
+      meta: { note: 'x' },
+      rows: [{ name: 'a' }, { name: 'b' }],
+    })
+    expect(form.isDirty).toBe(false)
+    expect(warn).toHaveBeenCalledTimes(4)
+    warn.mockRestore()
+  })
+
+  test('a setData that changes nothing is no edit', () => {
+    const form = createRowsForm()
+
+    form.setData((d) => {
+      /* oxlint-disable no-self-assign -- the no-op write is what this test checks */
+      d.name = d.name
+      d.meta = d.meta
+      /* oxlint-enable no-self-assign */
+      d.rows!.push()
+      d.rows!.sort((x, y) => (x?.name ?? '').localeCompare(y?.name ?? ''))
+      d.rows!.fill({ name: 'a' }, 0, 1)
+    })
     expect(form.isDirty).toBe(false)
 
-    data.name = 'm'
+    form.setData((d) => {
+      d.name = 'm'
+    })
     expect(form.isDirty).toBe(true)
   })
 
-  test('a proxy keeps its node; writes after the node left the form are ignored', () => {
+  test('setData re-validates fields that show errors', async () => {
+    const form = useFormCore({
+      schema: z.object({ name: z.string().min(2), other: z.string().min(2) }),
+      sourceValues: { name: 'n', other: 'o' },
+      async submit() {},
+    })
+    const name = form.fields.name.$use()
+    const other = form.fields.other.$use()
+    name.handleBlur()
+    form.setData((d) => {
+      d.name = 'x'
+    })
+    await sleep(0)
+    // blur on an unchanged field does not validate; setData only re-checks shown errors
+    expect([name.errors, other.errors]).toEqual([undefined, undefined])
+
+    await form.submit()
+    expect(name.errors).toHaveLength(1)
+    form.setData((d) => {
+      d.name = 'ok'
+    })
+    await sleep(0)
+    expect(name.errors).toBeUndefined()
+  })
+
+  test('a proxy keeps showing its node after the node left the form', () => {
     const form = createRowsForm()
     const row = form.data.rows![0]!
     const meta = form.data.meta!
 
-    form.data.rows!.shift()
-    form.data.meta = null
-    form.data.meta = { note: 'y' }
+    form.setData((d) => {
+      d.rows!.shift()
+      d.meta = { note: 'y' }
+    })
 
     expect(row.name).toBe('a')
-    expect(meta.note).toBe('x')
-    row.name = 'late'
-    meta.note = 'late'
     expect(form.data.rows!.map((r) => r?.name)).toEqual(['b'])
-    expect(form.data.meta?.note).toBe('y')
+    // objects outside arrays are updated in place
+    expect(meta.note).toBe('y')
   })
 
-  test('array read methods hand out writable item proxies', () => {
+  test('array read methods hand out item proxies', () => {
     const form = createRowsForm()
     const rows = form.data.rows!
+    form.setData((d) => {
+      d.rows = d.rows!.map((row) => ({ name: `${row!.name}2` }))
+    })
 
-    rows.find((row) => row?.name === 'b')!.name = 'b2'
-    rows.filter((row) => row?.name === 'a')[0]!.name = 'a2'
+    expect(rows.find((row) => row?.name === 'b2')).toBe(rows[1])
     expect(rows.map((row) => row?.name)).toEqual(['a2', 'b2'])
 
     const arrays = new Set<unknown>()
@@ -1097,8 +1248,10 @@ describe('data proxy', () => {
     const seen = [joined()]
     observe(joined, () => seen.push(joined()))
 
-    rows[1]!.name = 'b2'
-    rows.push({ name: 'c' })
+    form.fields.rows.at(1).name.$use().handleChange('b2')
+    form.setData((d) => {
+      d.rows!.push({ name: 'c' })
+    })
 
     expect(seen).toEqual(['a,b', 'a,b2', 'a,b2,c'])
   })
@@ -1132,8 +1285,10 @@ describe('hooks', () => {
     expect(afterSubmitSpy).toHaveBeenCalledWith({ success: true })
     expect(beforeSubmitSpy).toHaveBeenCalledBefore(afterSubmitSpy)
 
-    // @ts-expect-error test validation
-    form.data.name = 2
+    form.setData((d) => {
+      // @ts-expect-error test validation
+      d.name = 2
+    })
 
     result = await form.submit()
 

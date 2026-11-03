@@ -22,7 +22,9 @@ describe('vue', () => {
     const isChangedWatcher = vi.fn()
     watch(() => form.isChanged, isChangedWatcher, { flush: 'sync' })
 
-    form.data.name = 'Jane Doe'
+    form.setData((d) => {
+      d.name = 'Jane Doe'
+    })
 
     expect(dataWatcher).toHaveBeenCalledOnce()
     expect(isChangedWatcher).toHaveBeenCalledOnce()
@@ -114,13 +116,17 @@ describe('vue', () => {
 
     expect([count.value, joined.value, label.value]).toEqual([1, 'a', 'x'])
 
-    form.data.items!.push('b')
+    form.setData((d) => {
+      d.items!.push('b')
+    })
     expect([count.value, joined.value]).toEqual([2, 'a,b'])
 
     if (union.type === 'A') union.$field.value.$use().handleChange('y')
     expect(label.value).toBe('y')
 
-    form.data.union = { type: 'B', value: 1 }
+    form.setData((d) => {
+      d.union = { type: 'B', value: 1 }
+    })
     expect(label.value).toBe('B')
   })
 

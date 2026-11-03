@@ -53,6 +53,15 @@ export type NullableDeep<T> =
       : T | null
     : never
 
+/** `form.data`: plain objects and arrays are readonly, class instances (File, Date, …) stay as they are. */
+export type ReadonlyDeep<T> = T extends readonly (infer I)[]
+  ? readonly ReadonlyDeep<I>[]
+  : ObjectHasFunctionsOrSymbols<T> extends true
+    ? T
+    : T extends object
+      ? { readonly [K in keyof T]: ReadonlyDeep<T[K]> }
+      : T
+
 export type FormSchema = StandardSchemasSpec<object>
 export type FormData<Schema extends FormSchema> = NonNullable<
   NullableDeep<StandardSchemaV1.InferInput<Schema>>

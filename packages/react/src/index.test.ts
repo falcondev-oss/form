@@ -156,7 +156,9 @@ describe('react', () => {
     const isChangedWatcher = vi.fn()
     observe(() => form.isChanged, isChangedWatcher)
 
-    form.data.name = 'Jane Doe'
+    form.setData((d) => {
+      d.name = 'Jane Doe'
+    })
 
     expect(dataWatcher).toHaveBeenCalledOnce()
     expect(isChangedWatcher).toHaveBeenCalledOnce()

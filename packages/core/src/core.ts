@@ -11,6 +11,7 @@ import type {
   FormOptions,
   FormSchema,
   FormSourceValues,
+  ReadonlyDeep,
 } from './types'
 import {
   createMemo,
@@ -38,6 +39,8 @@ export function useFormCore<
   // inside a Solid owner the form is disposed with it; otherwise it lives as long as it is referenced
   return createRoot(() => createForm<Schema, SourceValues>(formOpts))
 }
+
+type Obj = Record<PropertyKey, unknown>
 
 function issueSegments(issue: StandardSchemaV1.Issue): PathSegment[] | undefined {
   return issue.path?.map((segment) => {
@@ -73,8 +76,6 @@ function createForm<
   const data = createFormStore(klona(untrack(sourceValues) ?? {}), {
     owner,
     itemKey: formOpts.itemKey,
-    onWrite: markEdited,
-    afterWrite: (id) => void fieldsById.get(id)?.validate(),
   })
   // data and source share item keys, so an item finds its own source value after moving
   const [sourceStored, setSourceStored] = createSignal<unknown>(data.snapshotStored())
@@ -255,7 +256,36 @@ function createForm<
     const resolved = untrack(() => data.resolve(itemLocation))
     // already removed
     if (!resolved) return
-    data.mutateArray(arrayLocation, 'splice', [resolved.segments.at(-1), 1])
+    const index = resolved.segments.at(-1) as number
+    update((root) => {
+      const list = resolved.segments
+        .slice(0, -1)
+        .reduce<unknown>((node, segment) => (node as Obj)[segment], root)
+      ;(list as unknown[]).splice(index, 1)
+    })
+  }
+
+  /**
+   * Applies `recipe` to a plain copy of the data in one edit. Items keep their
+   * fields by object identity, so moving an item moves its field. Fields that
+   * show errors are validated again; others stay quiet until blur or submit.
+   */
+  function update(recipe: (data: Obj) => void) {
+    const changed = commit(() => {
+      const edited = data.update(recipe)
+      if (edited) markEdited()
+      return edited
+    })
+    if (changed) void revalidateShown()
+  }
+
+  async function revalidateShown() {
+    const shown = [...fieldsById.values()].filter((field) => untrack(() => field.api.errors))
+    if (shown.length === 0) return
+    const located = await context.validate()
+    commit(() => {
+      for (const field of shown) field.applyIssues(located)
+    })
   }
 
   /** Accessors are addresses: every read and `$use()` resolves the position again. */
@@ -382,12 +412,14 @@ function createForm<
     },
     get data() {
       return (isPending() ? undefined : formData) as SourceValues extends undefined
-        ? Data | undefined
-        : Data
+        ? ReadonlyDeep<Data> | undefined
+        : ReadonlyDeep<Data>
     },
     get errors() {
       return errors()
     },
+    /** The only way to edit `form.data` directly: `form.setData((data) => { data.rows.push(row) })`. */
+    setData: (recipe: (data: Data) => void) => update(recipe as (data: Obj) => void),
     reset,
     submit,
   }
