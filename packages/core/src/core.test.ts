@@ -103,6 +103,50 @@ describe('form', () => {
       expect(field.isChanged).toBe(false)
     })
 
+    test('Temporal values in setData, moved items and validation', async () => {
+      const day = (d: number) => Temporal.PlainDate.from({ year: 2026, month: 11, day: d })
+      const submit = vi.fn(async () => {})
+      const form = useFormCore({
+        schema: z.object({
+          rows: z.array(z.object({ id: z.number(), date: z.instanceof(Temporal.PlainDate) })),
+        }),
+        sourceValues: {
+          rows: [
+            { id: 1, date: day(1) },
+            { id: 2, date: day(2) },
+          ],
+        },
+        submit,
+      })
+      const first = form.fields.rows.at(0).date.$use()
+
+      // an equal Temporal value is no edit
+      form.setData((d) => {
+        d.rows![0]!.date = day(1)
+      })
+      expect(form.isDirty).toBe(false)
+
+      form.setData((d) => {
+        d.rows!.reverse()
+      })
+      expect([first.path, first.value?.toString(), first.isChanged]).toEqual([
+        'rows[1].date',
+        '2026-11-01',
+        false,
+      ])
+      expect(first.value).toBeInstanceOf(Temporal.PlainDate)
+
+      first.handleChange(day(5))
+      expect(first.isChanged).toBe(true)
+
+      await form.submit()
+      const values = (
+        submit.mock.calls[0] as unknown as [{ values: { rows: { date: unknown }[] } }]
+      )[0].values
+      expect(values.rows.map((row) => String(row.date))).toEqual(['2026-11-02', '2026-11-05'])
+      expect(values.rows[1]!.date).toBeInstanceOf(Temporal.PlainDate)
+    })
+
     test('stays true until every change is undone', () => {
       const form = useFormCore({
         schema: z.object({
