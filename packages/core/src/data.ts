@@ -1,24 +1,23 @@
 import type { Accessor, Owner } from '@solidjs/signals'
 import type { Location, Step } from './location'
-import {
-  $TARGET,
-  createMemo,
-  createStore,
-  reconcile,
-  runWithOwner,
-  snapshot,
-  untrack,
-} from '@solidjs/signals'
+import { $TARGET, createMemo, createStore, runWithOwner, snapshot, untrack } from '@solidjs/signals'
 import { isArray, isPlainObject } from 'remeda'
 import { clonePlain, isDeepEqual } from './util'
 
 export type PathSegment = string | number
 
 /**
- * How arrays are stored: each item carries a key, so item identity survives
- * moves and lives in the store itself. The data proxy hides the entries.
+ * The item keys of the arrays in the data, kept beside it: `list` holds an
+ * array's item keys in order, `children` the keys below each item (by item
+ * key) or property. A field bound to an item key follows the item when it moves.
  */
-export type Entry = { key: string; value: unknown }
+export type Keys = { list?: string[]; children?: Record<string, Keys> }
+
+/** Plain data with its keys: the store, the source values and snapshots have this shape. */
+export type Keyed = { data: Obj; keys: Keys }
+
+/** An array item with its key and the keys below it. */
+type Item = { key: string; value: unknown; keys: Keys | undefined }
 
 export type ItemKey = string | ((item: unknown) => unknown)
 
@@ -26,34 +25,6 @@ export type FormStoreOptions = {
   owner: Owner
   itemKey: ItemKey | undefined
 }
-
-const ARRAY_MUTATIONS = new Set([
-  'push',
-  'pop',
-  'shift',
-  'unshift',
-  'splice',
-  'sort',
-  'reverse',
-  'fill',
-  'copyWithin',
-])
-
-// read methods whose callback receives the array as its last argument
-const CALLBACK_METHODS = new Set([
-  'every',
-  'filter',
-  'find',
-  'findIndex',
-  'findLast',
-  'findLastIndex',
-  'flatMap',
-  'forEach',
-  'map',
-  'reduce',
-  'reduceRight',
-  'some',
-])
 
 let keyCounter = 0
 const newKey = () => `${(++keyCounter).toString(36)}${Math.random().toString(36).slice(2, 6)}`
@@ -63,16 +34,12 @@ const isObject = (value: unknown): value is Obj => typeof value === 'object' && 
 const isContainer = (value: unknown): value is object => isArray(value) || isPlainObject(value)
 const isIndex = (value: unknown) => typeof value === 'string' && /^\d+$/.test(value)
 const isStoreNode = (value: object) => (value as Record<symbol, unknown>)[$TARGET] !== undefined
+const isEmptyKeys = (keys: Keys): boolean =>
+  !keys.list && Object.values(keys.children ?? {}).every(isEmptyKeys)
+const sameKind = (a: unknown, b: unknown) =>
+  isContainer(a) && isContainer(b) && isArray(a) === isArray(b)
 
-/** Stored form → plain data. Reads through store proxies are tracked. */
-export function toPlain(value: unknown): unknown {
-  if (isArray(value)) return value.map((entry) => toPlain((entry as Entry).value))
-  if (isPlainObject(value))
-    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, toPlain(v)]))
-  return value
-}
-
-/** Whether `toPlain(stored)` and `plain` differ in this node alone: kind, keys, length or leaf value. */
+/** Whether `stored` and `plain` differ in this node alone: kind, keys, length or leaf value. */
 function nodeDiffers(stored: unknown, plain: unknown, subset: boolean): boolean {
   if (isArray(stored)) return !isArray(plain) || stored.length !== plain.length
   if (isPlainObject(stored)) {
@@ -92,11 +59,10 @@ function findDifference(
   path: PathSegment[],
 ): boolean {
   if (isArray(stored)) {
-    const entries = stored as Entry[]
-    const { length } = entries
+    const { length } = stored
     if (!isArray(plain) || plain.length !== length) return true
     for (let i = 0; i < length; i++) {
-      if (findDifference(entries[i]!.value, plain[i], false, path)) {
+      if (findDifference(stored[i], plain[i], false, path)) {
         path.push(i)
         return true
       }
@@ -124,13 +90,9 @@ function differsAlong(stored: unknown, plain: unknown, subset: boolean, path: Pa
   for (const segment of path) {
     if (nodeDiffers(stored, plain, subset)) return true
     subset = false
-    if (isArray(stored)) {
-      stored = (stored as Entry[])[segment as number]?.value
-      plain = (plain as unknown[])[segment as number]
-    } else if (isPlainObject(stored) && Object.hasOwn(stored, segment)) {
-      stored = stored[segment]
-      plain = (plain as Obj)[segment]
-    } else return false
+    if (!isObject(stored) || !Object.hasOwn(stored, segment)) return false
+    stored = stored[segment]
+    plain = (plain as Obj)[segment]
   }
   return nodeDiffers(stored, plain, subset)
 }
@@ -152,142 +114,169 @@ export function createDiffer(stored: () => unknown, plain: () => unknown, subset
 export type FormStore = ReturnType<typeof createFormStore>
 
 export function createFormStore(initial: object, opts: FormStoreOptions) {
-  const proxies = new WeakMap<object, object>() // stored node → its proxy
-  const proxyNodes = new WeakMap<object, object>() // proxy → its stored node
-
   const itemId = (item: unknown): unknown => {
     if (typeof opts.itemKey === 'function') return opts.itemKey(item)
     return isPlainObject(item) ? item[opts.itemKey ?? 'id'] : undefined
   }
 
-  /**
-   * Plain data → stored form. An array item keeps the key of the `previous`
-   * item it matches: the same object (`identity`, from a draft), else the same
-   * item id, else the same primitive value, else (no id on either side) the
-   * same position. Always builds new containers, so the caller's objects never
-   * enter the store.
-   */
-  function toStored(
-    value: unknown,
-    previous?: unknown,
-    identity?: WeakMap<object, Entry>,
-  ): unknown {
-    const proxied = isObject(value) ? proxyNodes.get(value) : undefined
-    if (proxied) value = untrack(() => toPlain(proxied))
-
-    if (isArray(value)) {
-      const matched = matchEntries(isArray(previous) ? (previous as Entry[]) : [], value, identity)
-      return value.map((item, i) => ({
-        key: matched[i]?.key ?? newKey(),
-        value: toStored(item, matched[i]?.value, identity),
-      }))
-    }
-    if (isPlainObject(value)) {
-      const prev = isPlainObject(previous) ? previous : undefined
-      return Object.fromEntries(
-        Object.entries(value).map(([k, v]) => [k, toStored(v, prev?.[k], identity)]),
-      )
-    }
-    return value
+  function itemsOf(value: unknown, keys: Keys | undefined): Item[] {
+    if (!isArray(value) || !keys?.list) return []
+    return keys.list.map((key, i) => ({ key, value: value[i], keys: keys.children?.[key] }))
   }
 
-  function matchEntries(
-    previous: Entry[],
+  /**
+   * Keys for plain `value`. An array item keeps the key of the previous item it
+   * matches: the same object (`identity`, from a draft), else the same item id,
+   * else the same primitive value, else (no id on either side) the same position.
+   */
+  function toKeys(
+    value: unknown,
+    prevValue: unknown,
+    prevKeys: Keys | undefined,
+    identity?: WeakMap<object, Item>,
+  ): Keys | undefined {
+    const children: Record<string, Keys> = {}
+    const withChildren = (keys: Keys) =>
+      Object.keys(children).length > 0 ? { ...keys, children } : keys
+
+    if (isArray(value)) {
+      const matched = matchItems(itemsOf(prevValue, prevKeys), value, identity)
+      const list = value.map((item, i) => {
+        const key = matched[i]?.key ?? newKey()
+        const below = toKeys(item, matched[i]?.value, matched[i]?.keys, identity)
+        if (below) children[key] = below
+        return key
+      })
+      return withChildren({ list })
+    }
+    if (isPlainObject(value)) {
+      const prev = isPlainObject(prevValue) ? prevValue : undefined
+      for (const [prop, v] of Object.entries(value)) {
+        const below = toKeys(v, prev?.[prop], prevKeys?.children?.[prop], identity)
+        if (below) children[prop] = below
+      }
+      return Object.keys(children).length > 0 ? withChildren({}) : undefined
+    }
+    return undefined
+  }
+
+  function matchItems(
+    previous: Item[],
     next: readonly unknown[],
-    identity?: WeakMap<object, Entry>,
+    identity?: WeakMap<object, Item>,
   ) {
     const used = new Set<string>()
-    const take = (entry: Entry | undefined) => {
-      if (!entry || used.has(entry.key)) return
-      used.add(entry.key)
-      return entry
+    const take = (item: Item | undefined) => {
+      if (!item || used.has(item.key)) return
+      used.add(item.key)
+      return item
     }
+    const isDraftItem = (value: unknown) => isObject(value) && !!identity?.has(value)
 
-    const matched = next.map((item) => (isObject(item) ? take(identity?.get(item)) : undefined))
+    const matched = next.map((value) => (isObject(value) ? take(identity?.get(value)) : undefined))
 
-    const previousIds = previous.map((entry) => itemId(toPlain(entry.value)) ?? undefined)
-    const byId = new Map<unknown, Entry>()
-    for (const [i, entry] of previous.entries()) {
+    const previousIds = previous.map((item) => itemId(item.value) ?? undefined)
+    const byId = new Map<unknown, Item>()
+    for (const [i, item] of previous.entries()) {
       const id = previousIds[i]
-      if (id !== undefined && !byId.has(id)) byId.set(id, entry)
+      if (id !== undefined && !byId.has(id)) byId.set(id, item)
     }
-    for (const [i, item] of next.entries()) {
-      if (matched[i] || identity?.has(item as object)) continue
-      const id = itemId(item) ?? undefined
+    for (const [i, value] of next.entries()) {
+      if (matched[i] || isDraftItem(value)) continue
+      const id = itemId(value) ?? undefined
       if (id !== undefined) matched[i] = take(byId.get(id))
-      else if (!isObject(item))
-        matched[i] = take(previous.find((e) => !used.has(e.key) && Object.is(e.value, item)))
+      else if (!isObject(value))
+        matched[i] = take(previous.find((p) => !used.has(p.key) && Object.is(p.value, value)))
     }
-    for (const [i, item] of next.entries()) {
-      if (matched[i] || identity?.has(item as object)) continue
-      if ((itemId(item) ?? undefined) === undefined && previousIds[i] === undefined)
+    for (const [i, value] of next.entries()) {
+      if (matched[i] || isDraftItem(value)) continue
+      if ((itemId(value) ?? undefined) === undefined && previousIds[i] === undefined)
         matched[i] = take(previous[i])
     }
     return matched
   }
 
-  /** Stored form → plain draft; `identity` records each array item's entry. */
-  function toDraft(value: unknown, identity: WeakMap<object, Entry>): unknown {
-    if (isArray(value))
-      return (value as Entry[]).map((entry) => {
-        const item = toDraft(entry.value, identity)
-        if (isObject(item)) identity.set(item, entry)
-        return item
+  /** Copy of plain `value`; `identity` records each object array item with its key. */
+  function toDraft(
+    value: unknown,
+    keys: Keys | undefined,
+    identity: WeakMap<object, Item>,
+  ): unknown {
+    if (isArray(value)) {
+      return itemsOf(value, keys).map((item) => {
+        const copy = toDraft(item.value, item.keys, identity)
+        if (isObject(copy)) identity.set(copy, item)
+        return copy
       })
-    if (isPlainObject(value))
-      return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, toDraft(v, identity)]))
+    }
+    if (isPlainObject(value)) {
+      return Object.fromEntries(
+        Object.entries(value).map(([k, v]) => [k, toDraft(v, keys?.children?.[k], identity)]),
+      )
+    }
     return value
   }
 
-  const [state, setState] = createStore<Obj>(toStored(initial) as Obj)
+  const initialData = clonePlain(initial) as Obj
+  const [state, setState] = createStore<Keyed>({
+    data: initialData,
+    keys: toKeys(initialData, undefined, undefined) ?? {},
+  })
 
   const keyIndexes = new WeakMap<object, Accessor<Map<string, number>> | Map<string, number>>()
-  function indexOfKey(entries: Entry[], key: string) {
-    let index = keyIndexes.get(entries)
+  function indexOfKey(list: string[], key: string) {
+    let index = keyIndexes.get(list)
     if (!index) {
-      const build = () => new Map(entries.map((entry, i) => [entry.key, i]))
-      // one memo per stored array: every field in it looks its item up in O(1)
-      index = isStoreNode(entries) ? runWithOwner(opts.owner, () => createMemo(build)) : build()
-      keyIndexes.set(entries, index)
+      const build = () => new Map(list.map((k, i) => [k, i]))
+      // one memo per stored key list: every field in the array looks its item up in O(1)
+      index = isStoreNode(list) ? runWithOwner(opts.owner, () => createMemo(build)) : build()
+      keyIndexes.set(list, index)
     }
     return (typeof index === 'function' ? index() : index).get(key) ?? -1
   }
 
-  /** Current positional path and value of `location` in `root`; undefined once an item in it is gone. */
-  function resolveIn(root: unknown, location: Location) {
+  /** Current positional path, value and keys of `location` in `root`; undefined once an item in it is gone. */
+  function resolveIn(root: Keyed, location: Location) {
     const segments: PathSegment[] = []
-    let node = root
+    let node: unknown = root.data
+    let keys: Keys | undefined = root.keys
     for (const step of location) {
       if ('prop' in step) {
         segments.push(step.prop)
         node = isObject(node) && !isArray(node) ? node[step.prop] : undefined
+        keys = keys?.children?.[step.prop]
         continue
       }
-      const entries = isArray(node) ? (node as Entry[]) : undefined
-      const index = 'item' in step ? (entries ? indexOfKey(entries, step.item) : -1) : step.index
+      const list: string[] | undefined = isArray(node) ? keys?.list : undefined
+      const index = 'item' in step ? (list ? indexOfKey(list, step.item) : -1) : step.index
       if (index < 0) return undefined
       segments.push(index)
-      node = entries?.[index]?.value
+      node = isArray(node) ? node[index] : undefined
+      const key: string | undefined = 'item' in step ? step.item : list?.[index]
+      keys = key === undefined ? undefined : keys?.children?.[key]
     }
-    return { segments, node }
+    return { segments, node, keys }
   }
 
   /** Positional path → location, binding each existing array item to its key. */
-  function locateIn(root: unknown, segments: readonly PathSegment[]): Step[] {
+  function locateIn(root: Keyed, segments: readonly PathSegment[]): Step[] {
     const location: Step[] = []
-    let node = root
+    let node: unknown = root.data
+    let keys: Keys | undefined = root.keys
     for (const segment of segments) {
       const atArray = isArray(node) || node === undefined || node === null
       if (atArray && (typeof segment === 'number' || isIndex(segment))) {
-        const entries = isArray(node) ? (node as Entry[]) : undefined
+        const list: string[] | undefined = isArray(node) ? keys?.list : undefined
         const position = Number(segment)
-        const index = position < 0 && entries ? entries.length + position : position
-        const entry = entries?.[index]
-        location.push(entry ? { item: entry.key } : { index })
-        node = entry?.value
+        const index: number = position < 0 && list ? list.length + position : position
+        const key: string | undefined = list?.[index]
+        location.push(key === undefined ? { index } : { item: key })
+        node = isArray(node) ? node[index] : undefined
+        keys = key === undefined ? undefined : keys?.children?.[key]
       } else {
         location.push({ prop: String(segment) })
         node = isObject(node) && !isArray(node) ? node[segment] : undefined
+        keys = keys?.children?.[String(segment)]
       }
     }
     return location
@@ -295,73 +284,143 @@ export function createFormStore(initial: object, opts: FormStoreOptions) {
 
   const resolve = (location: Location) => resolveIn(state, location)
 
-  /** Stored node → what users see: objects and arrays as readonly proxies, one per node. */
-  function present(node: unknown): unknown {
-    if (!isContainer(node)) return node
-    return proxies.get(node) ?? createDataProxy(node as Obj)
-  }
-
-  /** The container at `segments`, created on the way; `next` is the segment that will be read from it. */
-  function containerAt(draft: Obj, segments: readonly PathSegment[], next?: PathSegment): Obj {
-    let node = draft
-    for (const [i, segment] of segments.entries()) {
-      const makeNext = () => (typeof (segments[i + 1] ?? next) === 'number' ? [] : {})
-      if (typeof segment === 'number') {
-        const entries = node as unknown as Entry[]
-        while (entries.length <= segment) entries.push({ key: newKey(), value: undefined })
-        const entry = entries[segment]!
-        if (!isContainer(entry.value)) entry.value = makeNext()
-        node = entry.value as Obj
-      } else {
-        if (!isContainer(node[segment])) node[segment] = makeNext()
-        node = node[segment] as Obj
-      }
-    }
-    return node
-  }
-
-  /** Writes a stored value; reconcile by key keeps unchanged parts and item keys untouched. */
-  function assignStored(segments: readonly PathSegment[], stored: unknown) {
-    if (segments.length === 0) {
-      setState(reconcile((isPlainObject(stored) ? stored : {}) as Obj, 'key'))
+  /**
+   * Makes the draft `target` equal to `next`, moving array items by key. Items
+   * and objects that stay are updated in place, so their store nodes (and what
+   * readers hold of them) follow them.
+   */
+  function apply(target: Obj, next: Obj, keys: Keys | undefined, nextKeys: Keys | undefined) {
+    if (isArray(target)) {
+      const byKey = new Map<string, unknown>()
+      for (const [i, key] of (keys?.list ?? []).entries()) byKey.set(key, target[i])
+      const items = (next as unknown as unknown[]).map((value, i) => {
+        const key = nextKeys?.list?.[i]
+        const current = key === undefined ? undefined : byKey.get(key)
+        if (!sameKind(current, value)) return value
+        apply(current as Obj, value as Obj, keys?.children?.[key!], nextKeys?.children?.[key!])
+        return current
+      })
+      const changed =
+        items.length !== target.length || items.some((item, i) => !Object.is(item, target[i]))
+      if (changed) (target as unknown as unknown[]).splice(0, target.length, ...items)
       return
     }
+    for (const prop of Object.keys(target)) if (!Object.hasOwn(next, prop)) delete target[prop]
+    for (const [prop, value] of Object.entries(next)) {
+      const current = target[prop]
+      if (sameKind(current, value))
+        apply(current as Obj, value as Obj, keys?.children?.[prop], nextKeys?.children?.[prop])
+      else if (!Object.is(current, value) || !Object.hasOwn(target, prop)) target[prop] = value
+    }
+  }
 
+  /** Writes `keys` as the keys below `name` of `parent`, in place where they exist. */
+  function setKeys(parent: Keys, name: string, keys: Keys | undefined) {
+    const current = parent.children?.[name]
+    if (keys && current) apply(current as Obj, keys as Obj, undefined, undefined)
+    else if (keys) (parent.children ??= {})[name] = keys
+    else if (current) delete parent.children![name]
+  }
+
+  /** Writes plain `value` with its `keys` at `segments`, creating containers on the way. */
+  function assign(segments: readonly PathSegment[], value: unknown, keys: Keys | undefined) {
     setState((draft) => {
-      const last = segments.at(-1)!
-      let parent = containerAt(draft, segments.slice(0, -1), last)
-      let prop: PropertyKey = last
-      if (typeof last === 'number') {
-        const entries = parent as unknown as Entry[]
-        while (entries.length <= last) entries.push({ key: newKey(), value: undefined })
-        parent = entries[last] as unknown as Obj
-        prop = 'value'
+      if (segments.length === 0) {
+        const next = (isPlainObject(value) ? value : {}) as Obj
+        apply(draft.data, next, draft.keys, keys)
+        apply(draft.keys as Obj, (keys ?? {}) as Obj, undefined, undefined)
+        return
       }
 
-      const current = parent[prop]
-      if (isContainer(current) && isContainer(stored) && isArray(current) === isArray(stored))
-        reconcile(stored, 'key')(current)
-      else parent[prop] = stored
+      let parent = draft.data
+      let parentKeys = draft.keys
+      // a keys node missing on the way is built off the store, and only stored if it gets keys
+      let detached: { parent: Keys; name: string; node: Keys } | undefined
+      const finish = () => {
+        if (detached && !isEmptyKeys(detached.node))
+          (detached.parent.children ??= {})[detached.name] = detached.node
+      }
+
+      for (const [i, segment] of segments.entries()) {
+        let name = String(segment)
+        if (typeof segment === 'number') {
+          const list = (parentKeys.list ??= [])
+          const items = parent as unknown as unknown[]
+          while (items.length <= segment) {
+            items.push(undefined)
+            list.push(newKey())
+          }
+          name = list[segment]!
+        }
+
+        const current = parent[segment]
+        if (i === segments.length - 1) {
+          const currentKeys = parentKeys.children?.[name]
+          if (sameKind(current, value)) {
+            apply(current as Obj, value as Obj, currentKeys, keys)
+          } else parent[segment] = value
+          setKeys(parentKeys, name, keys)
+          return finish()
+        }
+
+        if (!isContainer(current)) {
+          const isList = typeof segments[i + 1] === 'number'
+          parent[segment] = isList ? [] : {}
+          if (isList) setKeys(parentKeys, name, { list: [] })
+        }
+        parent = parent[segment] as Obj
+
+        let next = parentKeys.children?.[name]
+        if (!next) {
+          next = {}
+          if (detached) (parentKeys.children ??= {})[name] = next
+          else detached = { parent: parentKeys, name, node: next }
+        }
+        parentKeys = next
+      }
     })
   }
 
-  /** Writes plain data; call inside `commit()`. */
-  function write(segments: readonly PathSegment[], value: unknown) {
-    const stored = untrack(() => toStored(value, readAt(segments)))
-    assignStored(segments, stored)
-  }
-
   function readAt(segments: readonly PathSegment[]): unknown {
-    let node: unknown = state
+    let node: unknown = state.data
     for (const segment of segments) {
       if (!isObject(node)) return undefined
       if (isArray(node)) {
-        const entries = node as unknown as Entry[]
         const position = Number(segment)
-        node = entries[position < 0 ? entries.length + position : position]?.value
+        node = node[position < 0 ? node.length + position : position]
       } else node = node[segment]
     }
     return node
+  }
+
+  const snapshotStored = () => clonePlain(untrack(() => snapshot(state))) as Keyed
+
+  /** Records each object array item below stored `value` by its store node, with its key. */
+  function indexItems(value: unknown, keys: Keys | undefined, identity: WeakMap<object, Item>) {
+    for (const item of itemsOf(value, keys)) {
+      if (isObject(item.value)) identity.set(item.value, item)
+      indexItems(item.value, item.keys, identity)
+    }
+    if (isPlainObject(value))
+      for (const [prop, v] of Object.entries(value)) indexItems(v, keys?.children?.[prop], identity)
+  }
+
+  /**
+   * Writes plain data; call inside `commit()`. Items of `form.data` passed back
+   * in (e.g. `[newRow, ...form.data.rows]`) keep their keys.
+   */
+  function write(segments: readonly PathSegment[], value: unknown) {
+    const keys = untrack(() => {
+      const current = resolveIn(state, locateIn(state, segments))
+      const identity = new WeakMap<object, Item>()
+      if (isContainer(value)) indexItems(current?.node, current?.keys, identity)
+      return toKeys(value, current?.node, current?.keys, identity)
+    })
+    assign(
+      segments,
+      untrack(() => clonePlain(value)),
+      keys,
+    )
   }
 
   /**
@@ -371,136 +430,36 @@ export function createFormStore(initial: object, opts: FormStoreOptions) {
    */
   function update(recipe: (draft: Obj) => void) {
     const before = snapshotStored()
-    const identity = new WeakMap<object, Entry>()
-    const draft = toDraft(before, identity) as Obj
+    const identity = new WeakMap<object, Item>()
+    const draft = toDraft(before.data, before.keys, identity) as Obj
     recipe(draft)
-    const after = toStored(draft, before, identity)
-    if (isDeepEqual(after, before)) return false
-    assignStored([], after)
+    const keys = toKeys(draft, before.data, before.keys, identity) ?? {}
+    if (isDeepEqual(draft, before.data) && isDeepEqual(keys, before.keys)) return false
+    assign([], clonePlain(draft), keys)
     return true
-  }
-
-  const snapshotStored = () => clonePlain(untrack(() => snapshot(state))) as Obj
-
-  function warnReadonly(): true {
-    console.warn('useForm:', 'form.data is readonly, use form.setData() or field.handleChange()')
-    return true
-  }
-
-  /**
-   * A readonly view of one stored node that hides the array entries. Reads go
-   * straight to the node (one tracked store read each). Like a plain object
-   * reference, the view keeps showing its node after the node leaves the form.
-   */
-  function createDataProxy(node: Obj): object {
-    const entries = isArray(node) ? (node as unknown as Entry[]) : undefined
-    const entryAt = (key: PropertyKey) =>
-      entries && isIndex(key) ? entries[Number(key)] : undefined
-    const items = () => {
-      const list: unknown[] = Array.from({ length: entries!.length })
-      for (const [i, entry] of entries!.entries()) list[i] = present(entry.value)
-      return list
-    }
-
-    // the target is a plain stand-in: invariant checks against a store proxy would cost a trap per read
-    const proxy = new Proxy(entries ? [] : {}, {
-      get(_target, key) {
-        if (!entries) {
-          if (typeof key === 'symbol') return Reflect.get(node, key)
-          return present(Reflect.get(node, key))
-        }
-
-        if (key === 'length') return entries.length
-        if (isIndex(key)) {
-          const entry = entries[Number(key)]
-          return entry && present(entry.value)
-        }
-        if (typeof key === 'string' && ARRAY_MUTATIONS.has(key)) return warnReadonly
-
-        // read methods run on a plain list of the items, like Vue's array instrumentation
-        const method = (Array.prototype as unknown as Record<PropertyKey, unknown>)[key]
-        if (typeof method !== 'function') return undefined
-        const hasCallback = typeof key === 'string' && CALLBACK_METHODS.has(key)
-        return function (this: unknown, ...args: unknown[]) {
-          // another receiver (e.g. the Vue bridge) reads item by item through itself, to track each read
-          if (this !== proxy && isObject(this)) return method.apply(this, args) as unknown
-
-          if (hasCallback) {
-            const callback = args[0] as (...a: unknown[]) => unknown
-            args[0] = function (this: unknown, ...callbackArgs: unknown[]) {
-              // the array argument is the proxy, as with a plain array
-              callbackArgs[callbackArgs.length - 1] = proxy
-              return callback.apply(this, callbackArgs)
-            }
-          }
-          return method.apply(items(), args) as unknown
-        }
-      },
-      set: warnReadonly,
-      defineProperty: warnReadonly,
-      deleteProperty: warnReadonly,
-      has(_target, key) {
-        if (entries) return key === 'length' || !!entryAt(key) || key in Array.prototype
-        return Reflect.has(node, key)
-      },
-      ownKeys() {
-        if (entries) return [...entries.keys()].map(String).concat('length')
-        return Reflect.ownKeys(node)
-      },
-      getOwnPropertyDescriptor(_target, key) {
-        // proxy invariant: the array target's own `length` is non-configurable
-        if (entries && key === 'length')
-          return { value: entries.length, writable: true, enumerable: false, configurable: false }
-        if (typeof key === 'symbol') return undefined
-
-        if (entries) {
-          const entry = entryAt(key)
-          if (!entry) return undefined
-          return {
-            value: present(entry.value),
-            writable: false,
-            enumerable: true,
-            configurable: true,
-          }
-        }
-
-        const descriptor = Reflect.getOwnPropertyDescriptor(node, key)
-        if (!descriptor) return undefined
-        return {
-          value: present(Reflect.get(node, key)),
-          writable: false,
-          enumerable: descriptor.enumerable,
-          configurable: true,
-        }
-      },
-    })
-
-    proxies.set(node, proxy)
-    proxyNodes.set(proxy, node)
-    return proxy
   }
 
   return {
-    /** The stored tree (arrays as entries), for tracked reads. */
+    /** The data and its keys, for tracked reads. */
     state,
-    /** Tracked: current positional path and stored value of a location. */
+    /** Tracked: current positional path, value and keys of a location. */
     resolve,
     resolveIn,
     locate: (segments: readonly PathSegment[]) => locateIn(state, segments),
     locateIn,
     /** Tracked positional read; negative indices count from the end. */
     readAt,
-    present,
-    root: () => present(state),
-    /** Plain data → stored form, matching items against the current data. */
-    prepare: (value: unknown) => untrack(() => toStored(value, state)),
-    /** Writes plain data; call inside `commit()`. */
+    /** Plain data with keys matched against `previous` (by default the current data). */
+    prepare: (value: unknown, previous: Keyed = state): Keyed => {
+      const data = (isPlainObject(value) ? clonePlain(value) : {}) as Obj
+      return { data, keys: untrack(() => toKeys(data, previous.data, previous.keys)) ?? {} }
+    },
     write,
-    /** Writes an already stored value (keys kept); call inside `commit()`. */
-    writeStored: (segments: readonly PathSegment[], stored: unknown) =>
-      assignStored(segments, clonePlain(stored)),
+    /** Writes data with its keys at `segments` (keys kept); call inside `commit()`. */
+    writeKeyed: (segments: readonly PathSegment[], value: unknown, keys: Keys | undefined) =>
+      assign(segments, clonePlain(value), keys && clonePlain(keys)),
     update,
-    /** A detached copy of the stored tree. */
+    /** A detached copy of the data and its keys. */
     snapshotStored,
   }
 }

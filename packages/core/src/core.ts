@@ -24,13 +24,13 @@ import {
 import { createHooks } from 'hookable'
 import { klona } from 'klona/full'
 import { hasAtLeast, isArray } from 'remeda'
-import { createDiffer, createFormStore, toPlain } from './data'
+import { createDiffer, createFormStore } from './data'
 import { assignDescriptors, createFormField } from './field'
 import { toJsonSchema } from './json-schema'
 import { locationId } from './location'
 import { commit, observe, toValue } from './reactive'
 import { extend } from './types'
-import { debugLog } from './util'
+import { clonePlain, debugLog } from './util'
 
 export function useFormCore<
   const Schema extends FormSchema,
@@ -78,13 +78,13 @@ function createForm<
     itemKey: formOpts.itemKey,
   })
   // data and source share item keys, so an item finds its own source value after moving
-  const [sourceStored, setSourceStored] = createSignal<unknown>(data.snapshotStored())
-  const formData = data.root() as Data
+  const [sourceStored, setSourceStored] = createSignal(data.snapshotStored())
+  const formData = data.state.data as Data
 
   // the source may have properties the data does not
   const isChanged = createMemo(
     createDiffer(
-      () => data.state,
+      () => data.state.data,
       () => sourceValues() ?? {},
       true,
     ),
@@ -101,10 +101,10 @@ function createForm<
   function reset() {
     debugLog(() => ['useForm: reset()'])
 
-    // items keep their keys (and fields) where they match the new source values
-    const stored = data.prepare(klona(untrack(sourceValues) ?? {}))
+    // items of the previous source values keep their keys (and fields) where they match
+    const stored = data.prepare(klona(untrack(sourceValues) ?? {}), untrack(sourceStored))
     commit(() => {
-      data.writeStored([], stored)
+      data.writeKeyed([], stored.data, stored.keys)
       setSourceStored(stored)
       setUpdateCount(0)
       setIssues(undefined)
@@ -152,7 +152,7 @@ function createForm<
       }),
     })
 
-    const result = standardSchema.validate(toPlain(stored)) as
+    const result = standardSchema.validate(clonePlain(stored.data)) as
       StandardSchemaV1.Result<Schema> | Promise<StandardSchemaV1.Result<Schema>>
     return result instanceof Promise ? result.then(locate) : locate(result)
   }

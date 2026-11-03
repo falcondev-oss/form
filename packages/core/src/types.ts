@@ -151,7 +151,8 @@ export type FormFieldInternal<T> = {
   errors: string[] | undefined
   schema: SchemaMeta
   value: T
-  handleChange: (value: T) => void
+  /** Accepts readonly values too, e.g. items of `form.data`. */
+  handleChange: (value: T | ReadonlyDeep<T>) => void
   handleBlur: () => void
   reset: () => void
   disabled: boolean

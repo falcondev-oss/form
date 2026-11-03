@@ -2,7 +2,7 @@ import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type { Accessor, Owner } from '@solidjs/signals'
 import type { Hookable } from 'hookable'
 import type { JSONSchema } from 'json-schema-typed'
-import type { FormStore, PathSegment } from './data'
+import type { FormStore, Keyed, PathSegment } from './data'
 import type { Location } from './location'
 import type {
   BuildFormFieldAccessors,
@@ -13,9 +13,10 @@ import type {
   FormOptions,
   FormSchema,
   FormSourceValues,
+  ReadonlyDeep,
 } from './types'
 import { createMemo, createSignal, runWithOwner, untrack } from '@solidjs/signals'
-import { createDiffer, toPlain } from './data'
+import { createDiffer } from './data'
 import { getSchemaMeta } from './json-schema'
 import { hasPendingStep, isWithin, locationId } from './location'
 import { commit, observe } from './reactive'
@@ -32,7 +33,7 @@ export type FormContext<Schema extends FormSchema> = {
   jsonSchema: JSONSchema.Interface | undefined
   data: FormStore
   /** The source values in stored form, sharing item keys with the data. */
-  sourceStored: Accessor<unknown>
+  sourceStored: Accessor<Keyed>
   issues: Accessor<LocatedIssue[] | undefined>
   setIssues: (issues: LocatedIssue[] | undefined) => void
   validate: () => LocatedIssue[] | undefined | Promise<LocatedIssue[] | undefined>
@@ -74,12 +75,12 @@ export function createFormField<T, Schema extends FormSchema>(
   const value = createMemo<T>((prev) => {
     const current = resolved()
     if (!current) return (prev ?? null) as T
-    return (form.data.present(current.node) ?? null) as T
+    return (current.node ?? null) as T
   })
 
   // an item compares with its own source value, wherever it moved; new items have none
   const sourceValue = createMemo(
-    () => toPlain(form.data.resolveIn(form.sourceStored(), location())?.node) ?? null,
+    () => form.data.resolveIn(form.sourceStored(), location())?.node ?? null,
   )
   const isChanged = createMemo(createDiffer(() => resolved()?.node ?? null, sourceValue))
 
@@ -101,7 +102,7 @@ export function createFormField<T, Schema extends FormSchema>(
   })
 
   const schema = createMemo(() =>
-    form.jsonSchema ? getSchemaMeta(form.jsonSchema, form.data.root() as object, path()) : {},
+    form.jsonSchema ? getSchemaMeta(form.jsonSchema, form.data.state.data, path()) : {},
   )
 
   /** Shows this field's share of a form validation; call inside `commit()`. */
@@ -127,7 +128,7 @@ export function createFormField<T, Schema extends FormSchema>(
     return false
   }
 
-  function handleChange(newValue: T) {
+  function handleChange(newValue: T | ReadonlyDeep<T>) {
     if (blocked('handleChange()')) return
     const current = untrack(resolved)
     if (!current) {
@@ -166,10 +167,10 @@ export function createFormField<T, Schema extends FormSchema>(
     if (!current) return
 
     // the source's stored form carries the item keys, so moved items return to their places
-    const source = untrack(() => form.data.resolveIn(form.sourceStored(), location())?.node)
+    const source = untrack(() => form.data.resolveIn(form.sourceStored(), location()))
     commit(() => {
       setUpdateCount(0)
-      form.data.writeStored(current.segments, source ?? null)
+      form.data.writeKeyed(current.segments, source?.node ?? null, source?.keys)
       setIssues(undefined)
     })
   }

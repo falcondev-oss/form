@@ -727,14 +727,10 @@ describe('field', () => {
       '()',
     )
 
-    // nested values are readonly too
+    // nested values are readonly too (Solid's dev build warns)
     form.fields.$use().value.a = 'new value'
     form.fields.$use().value.obj!.b = 456
     form.fields.array.$use().value?.push('three')
-    expect(consoleWarnSpy).toHaveBeenLastCalledWith(
-      'useForm:',
-      'form.data is readonly, use form.setData() or field.handleChange()',
-    )
     expect(form.data).toEqual({ a: 'initial', array: ['one', 'two'], obj: { b: 123 } })
   })
 })
@@ -1066,6 +1062,37 @@ describe('item identity', () => {
     expect(names(form)).toEqual(['z', 'a2'])
   })
 
+  test('nested arrays keep their item keys when the outer item moves', () => {
+    const form = useFormCore({
+      schema: z.object({
+        rows: z.array(z.object({ name: z.string(), tags: z.array(z.string()) })),
+      }),
+      sourceValues: {
+        rows: [
+          { name: 'a', tags: ['a1', 'a2'] },
+          { name: 'b', tags: ['b1'] },
+        ],
+      },
+      async submit() {},
+    })
+    const a2 = form.fields.rows.at(0).tags.at(1).$use()
+    const rowA = form.data.rows![0]!
+
+    form.setData((d) => {
+      d.rows!.reverse()
+      d.rows![1]!.tags!.unshift('a0')
+    })
+    expect([a2.path, a2.value]).toEqual(['rows[1].tags[2]', 'a2'])
+    expect(rowA.tags).toEqual(['a0', 'a1', 'a2'])
+
+    a2.handleChange('A2')
+    form.fields.rows.$use().handleChange([{ name: 'c', tags: [] }, ...form.data.rows!])
+    expect([a2.path, a2.value]).toEqual(['rows[2].tags[2]', 'A2'])
+
+    form.reset()
+    expect([a2.path, a2.value]).toEqual(['rows[0].tags[1]', 'a2'])
+  })
+
   test('setData keeps fields with items it moves between and within arrays', () => {
     const form = useFormCore({
       schema: z.object({
@@ -1155,7 +1182,7 @@ describe('data proxy', () => {
       rows: [{ name: 'a' }, { name: 'b' }],
     })
     expect(form.isDirty).toBe(false)
-    expect(warn).toHaveBeenCalledTimes(4)
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('STORE_WRITE_OUTSIDE_SETTER'))
     warn.mockRestore()
   })
 
