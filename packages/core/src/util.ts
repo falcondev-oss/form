@@ -32,10 +32,6 @@ export function escapePathSegment(segment: string) {
   return segment.replaceAll('.', String.raw`\.`)
 }
 
-export function getFieldCachePath(path: string) {
-  return `${path.replaceAll('[', '._array[')}`
-}
-
 export const getProperty = ((
   ...args: Parameters<typeof getProperty_>
 ): ReturnType<typeof getProperty_> => {
@@ -68,6 +64,14 @@ export function hasSubObject(data: object, subObject: object) {
     ([key, value]) =>
       Object.hasOwn(data, key) && isDeepEqual(value, (data as Record<string, unknown>)[key]),
   )
+}
+
+/** Deep-copies plain objects and arrays; class instances (File, Date, …) are kept by reference. */
+export function clonePlain<T>(value: T): T {
+  if (isArray(value)) return value.map(clonePlain) as T
+  if (isPlainObject(value))
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, clonePlain(v)])) as T
+  return value
 }
 
 export function isPrimitive(value: unknown): value is string | number | boolean {

@@ -1,5 +1,4 @@
 import type { StandardJSONSchemaV1, StandardSchemaV1 } from '@standard-schema/spec'
-import type { MaybeRefOrGetter, Reactive, UnwrapNestedRefs } from '@vue/reactivity'
 import type { Hookable, NestedHooks } from 'hookable'
 import type { JSONSchema } from 'json-schema-typed'
 import type {
@@ -54,6 +53,15 @@ export type NullableDeep<T> =
       : T | null
     : never
 
+/** `form.data`: plain objects and arrays are readonly, class instances (File, Date, …) stay as they are. */
+export type ReadonlyDeep<T> = T extends readonly (infer I)[]
+  ? readonly ReadonlyDeep<I>[]
+  : ObjectHasFunctionsOrSymbols<T> extends true
+    ? T
+    : T extends object
+      ? { readonly [K in keyof T]: ReadonlyDeep<T[K]> }
+      : T
+
 export type FormSchema = StandardSchemasSpec<object>
 export type FormData<Schema extends FormSchema> = NonNullable<
   NullableDeep<StandardSchemaV1.InferInput<Schema>>
@@ -74,11 +82,19 @@ export interface FormOptions<
   schema: Schema
   sourceValues: MaybeGetter<SourceValues>
   submit: (ctx: { values: SubmitValues }) => Promise<void | { success: boolean }>
-  disabled?: MaybeRefOrGetter<boolean>
+  disabled?: boolean | (() => boolean)
   hooks?: NestedHooks<FormHookDefinitions<Schema>>
+  /**
+   * Identifies array items when an array is replaced (`reset`, new `sourceValues`,
+   * `handleChange([...])`), so fields stay with their item. Items without an id
+   * are matched by position. Default: `'id'`.
+   */
+  itemKey?: string | ((item: unknown) => unknown)
   [extend]?: {
-    setup?: <T>(field: FormFieldInternal<T>) => FormFieldExtend<T>
-    $use?: <T>(field: FormFieldInternal<T>) => FormFieldExtend<T>
+    /** Runs once per field, under the form's reactive owner. Getters and setters are kept. */
+    setup?: <T>(field: FormFieldInternal<T>) => Partial<FormFieldExtend<T>>
+    /** Like `setup`, and again for every translated view of the field. */
+    $use?: <T>(field: FormFieldInternal<T>) => Partial<FormFieldExtend<T>>
   }
 }
 
@@ -98,8 +114,6 @@ export interface FormHookDefinitions<Schema extends FormSchema> {
   beforeFieldChange: (field: FormFieldInternal<unknown>, newValue: unknown | null) => void
   afterFieldChange: (field: FormFieldInternal<unknown>, updatedValue: unknown | null) => void
 }
-
-export const setContext = Symbol('setContext')
 
 // export type NonPrimitiveReadonly<T> = T extends Primitive
 //   ? T
@@ -137,25 +151,26 @@ export type FormFieldInternal<T> = {
   errors: string[] | undefined
   schema: SchemaMeta
   value: T
-  handleChange: (value: T) => void
+  /** Accepts readonly values too, e.g. items of `form.data`. */
+  handleChange: (value: T | ReadonlyDeep<T>) => void
   handleBlur: () => void
   reset: () => void
   disabled: boolean
   isPending: boolean
+  /** The array item this field belongs to was removed; `handleChange()` is refused. */
+  isDetached: boolean
   isDirty: boolean
   isChanged: boolean
   path: string
   key: string
   $?: () => BuildFormFieldAccessors<any>
-  [setContext]: (ctx: { path: string }) => void
 }
-export type FormFieldContext<T> = Parameters<FormFieldInternal<T>[typeof setContext]>[0]
 
 // eslint-disable-next-line unused-imports/no-unused-vars
 export interface FormFieldExtend<T> {}
 
 export interface FormField<T>
-  extends Readonly<Omit<FormFieldInternal<T>, '$'>>, UnwrapNestedRefs<FormFieldExtend<T>> {
+  extends Readonly<Omit<FormFieldInternal<T>, '$'>>, FormFieldExtend<T> {
   $: () => BuildFormFieldAccessors<T>
 }
 
@@ -182,7 +197,7 @@ export type FormFieldAccessor<T> = {
   }) => NoInfer<FormField<If<IsUnknown<O>, T, O>>>
 }
 
-type FormFieldDiscriminatorAccessor<T, DiscriminatorKey extends PropertyKey> = {
+export type FormFieldDiscriminatorAccessor<T, DiscriminatorKey extends PropertyKey> = {
   $use: <
     Opts extends {
       discriminator?: DiscriminatorKey
@@ -273,9 +288,7 @@ export type BuildFormFieldAccessors<T, StopDiscriminator = false, _Root extends 
               : BuildFormFieldAccessors<TT[I]>
             : BuildFormFieldAccessors<TT[I]>
           delete: (key: string) => void
-          [Symbol.iterator]: () => ArrayIterator<
-            Reactive<BuildFormFieldAccessors<NonNullable<TT>[number]>>
-          >
+          [Symbol.iterator]: () => ArrayIterator<BuildFormFieldAccessors<NonNullable<TT>[number]>>
         } & FormFieldAccessor<T>
       : [NonNullable<T>] extends [Record<string, unknown>]
         ? ObjectHasFunctionsOrSymbols<T> extends true

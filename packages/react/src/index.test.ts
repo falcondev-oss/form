@@ -1,5 +1,5 @@
 import { act, renderHook } from '@testing-library/react'
-import { isReactive, watch } from '@vue/reactivity'
+import { observe } from '@falcondev-oss/form-core/reactive'
 import { useState } from 'react'
 import { describe, expect, test, vi } from 'vitest'
 import z from 'zod'
@@ -151,14 +151,14 @@ describe('react', () => {
       }),
     )
 
-    expect(isReactive(form)).toBe(true)
-
     const dataWatcher = vi.fn()
-    watch(() => form.data.name, dataWatcher)
+    observe(() => form.data.name, dataWatcher)
     const isChangedWatcher = vi.fn()
-    watch(() => form.isChanged, isChangedWatcher)
+    observe(() => form.isChanged, isChangedWatcher)
 
-    form.data.name = 'Jane Doe'
+    form.setData((d) => {
+      d.name = 'Jane Doe'
+    })
 
     expect(dataWatcher).toHaveBeenCalledOnce()
     expect(isChangedWatcher).toHaveBeenCalledOnce()

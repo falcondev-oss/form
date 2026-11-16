@@ -203,9 +203,6 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-patchedDependencies:
-  on-change@6.0.2: 2fb568a563fae7c76c854f0e1dda8676287f0a7ba571472700809cada6429145
-
 importers:
 
   .:
@@ -234,12 +231,6 @@ importers:
       '@standard-schema/spec':
         specifier: ^1.1.0
         version: 1.1.0
-      '@vue/reactivity':
-        specifier: '>=3.5.28 <4'
-        version: 3.5.41
-      '@vueuse/core':
-        specifier: ^14.4.0
-        version: 14.4.0(vue@3.5.41(typescript@7.0.2))
       dot-prop:
         specifier: ^10.2.0
         version: 10.2.0
@@ -265,15 +256,15 @@ importers:
       '@ark/schema':
         specifier: ^0.56.2
         version: 0.56.2
+      '@solidjs/signals':
+        specifier: 2.0.0-rc.20
+        version: 2.0.0-rc.20
       '@vitest/browser-playwright':
         specifier: ^4.1.11
         version: 4.1.11(playwright@1.63.0)(vite@8.2.1(@types/node@24.13.3)(jiti@2.7.0)(yaml@2.9.0))(vitest@4.1.11)
       arktype:
         specifier: ^2.2.3
         version: 2.2.3
-      on-change:
-        specifier: ^6.0.2
-        version: 6.0.2(patch_hash=2fb568a563fae7c76c854f0e1dda8676287f0a7ba571472700809cada6429145)
       playwright:
         specifier: ^1.63.0
         version: 1.63.0
@@ -295,9 +286,9 @@ importers:
       '@falcondev-oss/form-core':
         specifier: workspace:*
         version: link:../core
-      '@vue/reactivity':
-        specifier: ^3.5.41
-        version: 3.5.41
+      '@solidjs/signals':
+        specifier: ^2.0.0-rc.20
+        version: 2.0.0-rc.20
     devDependencies:
       '@testing-library/react':
         specifier: ^16.3.2
@@ -329,6 +320,9 @@ importers:
       '@falcondev-oss/form-core':
         specifier: workspace:*
         version: link:../core
+      '@solidjs/signals':
+        specifier: ^2.0.0-rc.20
+        version: 2.0.0-rc.20
       hookable:
         specifier: ^6.1.1
         version: 6.1.1
@@ -1150,6 +1144,10 @@ packages:
     resolution: {integrity: sha512-TeheYy0ILzBEI/CO55CP6zJCSdSWeRtGnHy8U8dWSUH4I68iqTsy7HkMktR4xakThc9jotkPQUXT4ITdbV7cHA==}
     engines: {node: '>=18'}
 
+  '@solidjs/signals@2.0.0-rc.20':
+    resolution: {integrity: sha512-BIL5dKm0dAtPGsCEuLSNw60spDbmYG5QFK+aHUxPIgPLweA8IeJKd62DiqqqU/jqX0x39ty31GoP1n+ZINkrcg==}
+    engines: {node: '>=22.12.0'}
+
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
 
@@ -1322,9 +1320,6 @@ packages:
 
   '@types/unist@3.0.3':
     resolution: {integrity: sha512-ko/gIFJRv177XgZsZcBwnqJN5x/Gien8qNOn0D5bQU/zAzVf9Zt3BlcUiLqhV9y4ARk0GbT3tnUiPNgnTXzc/Q==}
-
-  '@types/web-bluetooth@0.0.21':
-    resolution: {integrity: sha512-oIQLCGWtcFZy2JW77j9k8nHzAOpqMHLQejDA48XXMWH6tjCQHz5RCFz1bzsmROyL6PUm+LLnUiI4BCn221inxA==}
 
   '@types/whatwg-mimetype@3.0.2':
     resolution: {integrity: sha512-c2AKvDT8ToxLIOUlN51gTiHXflsfIFisS4pO7pDPoKouJCESkhZnEy623gwP9laCy5lnLDAw1vAzu2vM2YLOrA==}
@@ -1798,19 +1793,6 @@ packages:
       vue:
         optional: true
 
-  '@vueuse/core@14.4.0':
-    resolution: {integrity: sha512-X4WHz1HlCzCBoYXesUkifzzWBAcZgXG8Fi5iNPQg/epdzOB3gu8Fawj3hvuwYR1nGcXGnvxwYYcUC/71++svtQ==}
-    peerDependencies:
-      vue: ^3.5.0
-
-  '@vueuse/metadata@14.4.0':
-    resolution: {integrity: sha512-swx/255R6JyHZFJhx845iz5CRWDZdCfvkZOpACWc5+c5WHcG24mv8gUT1WIdFQaHt6dq79rvILd9QnCWiyVm9g==}
-
-  '@vueuse/shared@14.4.0':
-    resolution: {integrity: sha512-JRgY90Sz8DDtPMsaDflvPMp9xYk69JZAmbuDvAquUVXKr2gEjqtzGNTTthLfckH0BzBqvnu31gb4a8TGLRe79g==}
-    peerDependencies:
-      vue: ^3.5.0
-
   '@yuku-codegen/binding-android-arm64@0.8.4':
     resolution: {integrity: sha512-rsYkGl2kOkDRsh1mxriYnk1qBS78vjlBJ3+T2XwtwKwqOliy2n+2Ae0EDxJ/uX1DZLm3KkBZarGO5isEnmHchA==}
     cpu: [arm64]
@@ -1868,6 +1850,7 @@ packages:
     cpu: [x64]
     os: [linux]
     libc: [glibc]
+    deprecated: yuku-codegen is pure JavaScript since 0.14
 
   '@yuku-codegen/binding-linux-x64-musl@0.8.4':
     resolution: {integrity: sha512-QH60PE4eZecmgNGa1/T1cKPhrfxt6ANtu4lrQ1FZ50F9b0GS9WjGmIjrfdSUeQa+f2Iqk3oEFSJdgVHBg1KPNg==}
@@ -1945,6 +1928,7 @@ packages:
     cpu: [x64]
     os: [linux]
     libc: [glibc]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-linux-x64-musl@0.8.4':
     resolution: {integrity: sha512-9RsEw2xYHqU/pjSRBTOupWN3sF8uz9stjJdARfz6o0llvF+yfrj5QHmTiocGGBeAI80fvKmDtr2RIQClUzAPcA==}
@@ -3757,10 +3741,6 @@ packages:
   ohash@2.0.11:
     resolution: {integrity: sha512-RdR9FQrFwNBNXAr4GixM8YaRZRJ5PUWbKYbE5eOsrwAjJW0q2REGcf79oYPsLyskQCZG1PLN+S/K1V00joZAoQ==}
 
-  on-change@6.0.2:
-    resolution: {integrity: sha512-08+12qcOVEA0fS9g/VxKS27HaT94nRutUT77J2dr8zv/unzXopvhBuF8tNLWsoLQ5IgrQ6eptGeGqUYat82U1w==}
-    engines: {node: '>=20'}
-
   open@11.0.0:
     resolution: {integrity: sha512-smsWv2LzFjP03xmvFoJ331ss6h+jixfA4UUV/Bsiyuu4YJPfN+FIQGOIiv4w9/+MoHkfkJ22UIaQWRVFRfH6Vw==}
     engines: {node: '>=20'}
@@ -5527,6 +5507,8 @@ snapshots:
 
   '@sindresorhus/base62@1.0.0': {}
 
+  '@solidjs/signals@2.0.0-rc.20': {}
+
   '@standard-schema/spec@1.1.0': {}
 
   '@stylistic/eslint-plugin@5.10.0(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))':
@@ -5676,8 +5658,6 @@ snapshots:
       csstype: 3.2.3
 
   '@types/unist@3.0.3': {}
-
-  '@types/web-bluetooth@0.0.21': {}
 
   '@types/whatwg-mimetype@3.0.2': {}
 
@@ -6219,19 +6199,6 @@ snapshots:
   '@vue/tsconfig@0.9.1(typescript@7.0.2)(vue@3.5.41(typescript@7.0.2))':
     optionalDependencies:
       typescript: 7.0.2
-      vue: 3.5.41(typescript@7.0.2)
-
-  '@vueuse/core@14.4.0(vue@3.5.41(typescript@7.0.2))':
-    dependencies:
-      '@types/web-bluetooth': 0.0.21
-      '@vueuse/metadata': 14.4.0
-      '@vueuse/shared': 14.4.0(vue@3.5.41(typescript@7.0.2))
-      vue: 3.5.41(typescript@7.0.2)
-
-  '@vueuse/metadata@14.4.0': {}
-
-  '@vueuse/shared@14.4.0(vue@3.5.41(typescript@7.0.2))':
-    dependencies:
       vue: 3.5.41(typescript@7.0.2)
 
   '@yuku-codegen/binding-android-arm64@0.8.4':
@@ -8499,8 +8466,6 @@ snapshots:
   obug@2.1.4: {}
 
   ohash@2.0.11: {}
-
-  on-change@6.0.2(patch_hash=2fb568a563fae7c76c854f0e1dda8676287f0a7ba571472700809cada6429145): {}
 
   open@11.0.0:
     dependencies:

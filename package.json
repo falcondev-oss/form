@@ -3,7 +3,7 @@
   "type": "module",
   "version": "0.24.6",
   "private": true,
-  "description": "Type-safe, framework agnostic form state library based on @vue/reactivity.",
+  "description": "Type-safe, framework agnostic form state library based on Solid 2.0 signals.",
   "license": "Apache-2.0",
   "repository": "github:falcondev-oss/form",
   "bugs": {
@@ -14,6 +14,7 @@
     "frontend",
     "state-management",
     "reactivity",
+    "solid",
     "typescript"
   ],
   "engines": {

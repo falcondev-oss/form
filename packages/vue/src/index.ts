@@ -4,14 +4,30 @@ import type {
   FormSchema,
   FormSourceValues,
 } from '@falcondev-oss/form-core'
-import type { MaybeRefOrGetter, WritableComputedRef } from 'vue'
+import type { MaybeRefOrGetter } from 'vue'
 import { extend, useFormCore } from '@falcondev-oss/form-core'
-import { computed, reactive, toValue } from 'vue'
+import { commit } from '@falcondev-oss/form-core/reactive'
+import { createRoot, createSignal, getOwner, runWithOwner } from '@solidjs/signals'
+import { computed, getCurrentScope, onScopeDispose, reactive, toRaw, toValue, watch } from 'vue'
+import { createVueBridge } from './bridge'
 
 declare module '@falcondev-oss/form-core' {
   interface FormFieldExtend<T> {
-    model: WritableComputedRef<T>
+    /** Writable for `v-model`: reads `field.value`, writes through `field.handleChange()`. */
+    model: T
   }
+}
+
+/** Mirrors a Vue ref or getter into a Solid signal. */
+function toSolid<T>(source: MaybeRefOrGetter<T>) {
+  // boxed: a getter is a valid value and must not be called as a signal updater
+  const [value, setValue] = createSignal({ current: toRaw(toValue(source)) })
+  watch(
+    () => toRaw(toValue(source)),
+    (current) => commit(() => setValue({ current })),
+    { flush: 'sync' },
+  )
+  return () => value().current
 }
 
 export function useFormHandles(forms: MaybeRefOrGetter<FormHandle[]>) {
@@ -54,24 +70,36 @@ export function useForm<
   const Schema extends FormSchema,
   SourceValues extends FormSourceValues<Schema> = FormSourceValues<Schema>,
 >(
-  opts: FormOptions<Schema, SourceValues>,
+  opts: Omit<FormOptions<Schema, SourceValues>, 'sourceValues' | 'disabled'> & {
+    sourceValues: MaybeRefOrGetter<SourceValues>
+    disabled?: MaybeRefOrGetter<boolean>
+  },
 ): ReturnType<typeof useFormCore<Schema, SourceValues>> & { _v: 'new' } {
-  const form = useFormCore({
-    ...opts,
-    [extend]: {
-      $use: (field) => {
-        const model = computed({
-          get: () => field.value,
-          set: (v) => field.handleChange(v),
-        })
-
-        return { model }
-      },
-    },
+  const owner = createRoot((dispose) => {
+    if (getCurrentScope()) onScopeDispose(dispose)
+    return getOwner()!
   })
 
+  const form = runWithOwner(owner, () =>
+    useFormCore({
+      ...opts,
+      sourceValues: toSolid(opts.sourceValues),
+      disabled: toSolid(opts.disabled ?? false),
+      [extend]: {
+        $use: (field) => ({
+          get model() {
+            return field.value
+          },
+          set model(value) {
+            field.handleChange(value)
+          },
+        }),
+      },
+    }),
+  )
+
   // TODO: remove _v type flag
-  return Object.assign(form, { _v: 'new' } as const)
+  return Object.assign(createVueBridge(owner).toVue(form), { _v: 'new' } as const)
 }
 
 export type {
@@ -82,4 +110,3 @@ export type {
   FormHandle,
   NullableDeep,
 } from '@falcondev-oss/form-core'
-export { refEffect } from '@falcondev-oss/form-core/reactive'

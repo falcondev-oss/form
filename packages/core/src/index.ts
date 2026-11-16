@@ -17,5 +17,6 @@ export {
   type FormSourceValues,
   type FormSubmitValues,
   type NullableDeep,
+  type ReadonlyDeep,
   type SchemaMeta,
 } from './types'
